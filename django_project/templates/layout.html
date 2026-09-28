@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load static %}
+{% comment %}
+  The application shell shared by every page: header + nav, status banners, the page slot, the dock, dialogs.
+  A page extends this and fills: {% block page %} (content), optionally {% block rail %}, {% block page_dialogs %},
+  and {% block page_js %} (its own script). Shared scripts are loaded here, in dependency order.
+{% endcomment %}
+
+{% block body %}
+<div class="station">
+  {% include "partials/_header.html" %}
+
+  <div id="banners"></div>
+  <div id="alerts"></div>
+  <div id="backends" class="marks"></div>
+
+  <div class="frame">
+    {% block rail %}{% endblock %}
+    <div class="sheets">
+      {% block page %}{% endblock %}
+    </div>
+  </div>
+
+  {% block page_tools %}{% endblock %}
+  {% include "partials/_dock.html" %}
+</div>
+
+{% include "partials/_dialogs.html" %}
+{% block page_dialogs %}{% endblock %}
+{% endblock %}
+
+{% block scripts %}
+<script>window.URLS={{ urls_json|safe }};</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{# shared, in dependency order #}
+<script src="{% static 'js/core.js' %}?v=1"></script>
+<script src="{% static 'js/charts.js' %}?v=1"></script>
+<script src="{% static 'js/ui.js' %}?v=3"></script>
+<script src="{% static 'js/job.js' %}?v=1"></script>
+<script src="{% static 'js/match.js' %}?v=5"></script>
+{# page-specific #}
+{% block page_js %}{% endblock %}
+<script src="{% static 'js/boot.js' %}?v=1"></script>
+{% endblock %}

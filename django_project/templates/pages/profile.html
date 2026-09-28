@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block page %}
+      <section class="sheet" id="resumeCard">
+        <h1 class="sheet-title">Profile <span class="quiet">· Your resume, read properly ·</span></h1>
+        <div id="resumeBody">Loading</div>
+      </section>
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/profile.js' %}?v=1"></script>
+{% endblock %}

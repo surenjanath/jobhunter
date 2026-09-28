@@ -1,0 +1,52 @@
+# --- personal data & runtime state: never committed --------------------------------------------------------------
+# Your real config is created from the *.example templates on first run and stays local.
+jobhunt/config/profile.yaml
+jobhunt/config/fact_bank.md
+jobhunt/config/form_answers.md
+jobhunt/config/ui_settings.json
+jobhunt/config/resume.md
+# Your resume and notes
+docs/*Resume*.md
+docs/*resume*.md
+docs/Role_Fit_Map*.md
+docs/Job_Search_Links.md
+docs/private/
+# Scanner output: jobs database, exports, cover letters, raw payloads
+jobhunt/output/*
+!jobhunt/output/.gitkeep
+history/
+# Django's own database (status-change audit log) and collected static files
+django_project/db.sqlite3
+django_project/staticfiles/
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# --- secrets -------------------------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+service_account.json
+*-key.json
+credentials.json
+
+# --- python / tooling ----------------------------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# --- os / editor ---------------------------------------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp

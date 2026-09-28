@@ -1,0 +1,247 @@
+# JobHunter configuration template.
+# On first run this file is copied to config/profile.yaml (which is git-ignored, so your details stay local).
+# Edit candidate:, targets:, scoring: and sources: to fit you. Most of it can also be changed from the Settings and
+# Profile pages. Sources set to false are skipped; `trinidad_custom_sites` holds employers you add from the Trinidad page.
+candidate:
+  name: Your Name
+  email: you@example.com
+  phone: +1 (555) 000-0000
+  location: Port of Spain, Trinidad & Tobago
+  timezone: UTC-4
+  timezone_note: Full overlap with US Eastern
+  website: https://example.com
+  github: https://github.com/your-handle
+  linkedin: https://linkedin.com/in/your-handle
+  years_experience: 5
+  work_authorization: Available as an international contractor, directly or through
+    an employer of record such as Deel or Remote.com. Not currently authorised to
+    work in the US or EU; open to visa sponsorship and relocation.
+targets:
+  tier_1:
+  - forward deployed engineer
+  - solutions engineer
+  - solutions architect
+  - implementation engineer
+  - applied ai engineer
+  - automation engineer
+  - founding engineer
+  - product engineer
+  - backend engineer python
+  - django developer
+  - internal tools engineer
+  tier_2:
+  - ai engineer
+  - llm engineer
+  - machine learning engineer llm
+  - data engineer
+  - analytics engineer
+  - platform engineer python
+  - full stack engineer python
+bonus_domains:
+- insurance
+- insurtech
+- reinsurance
+- underwriting
+- claims
+- actuarial
+- fintech
+- banking
+- payments
+- regtech
+- compliance
+- healthtech
+- risk
+scoring:
+  strong_signals:
+    python: 8
+    django: 10
+    flask: 5
+    postgres: 5
+    postgresql: 5
+    sql: 5
+    etl: 7
+    data pipeline: 7
+    automation: 6
+    rest api: 5
+    docker: 4
+    nginx: 3
+    github actions: 4
+    ci/cd: 3
+    pandas: 4
+    llm: 9
+    large language model: 9
+    rag: 9
+    retrieval augmented: 9
+    agent: 8
+    multi-agent: 10
+    agentic: 9
+    ollama: 6
+    prompt engineering: 5
+    n8n: 5
+    power bi: 3
+    tableau: 3
+    supabase: 3
+    end-to-end ownership: 6
+    full ownership: 5
+    generalist: 5
+    wear many hats: 5
+    scraping: 4
+    webhooks: 3
+  context_signals:
+    remote: 8
+    fully remote: 10
+    remote-first: 10
+    contractor: 6
+    contract: 4
+    employer of record: 10
+    latam: 12
+    latin america: 12
+    caribbean: 15
+    anywhere: 8
+    work from anywhere: 10
+    global: 5
+    visa sponsorship: 8
+    relocation: 6
+    seed stage: 5
+    series a: 4
+    startup: 4
+    small team: 4
+    trinidad: 14
+    tobago: 14
+    port of spain: 12
+    san fernando: 10
+    chaguanas: 10
+    couva: 8
+    point lisas: 8
+    arima: 8
+    trinidad and tobago: 16
+  negative_signals:
+    kubernetes: -5
+    terraform: -4
+    k8s: -5
+    scala: -7
+    c++: -8
+    golang: -4
+    rust: -6
+    java: -5
+    .net: -6
+    c#: -6
+    php: -5
+    ruby: -4
+    react native: -3
+    kafka: -4
+    spark: -5
+    hadoop: -6
+    databricks: -5
+    snowflake: -5
+    airflow: -6
+    dbt: -6
+    pytorch: -6
+    tensorflow: -6
+    deep learning: -7
+    model training: -7
+    research scientist: -12
+    phd: -10
+    publications: -8
+    10+ years: -10
+    12+ years: -12
+    15+ years: -15
+    staff engineer: -5
+    principal engineer: -7
+    engineering manager: -12
+    director of: -15
+    head of engineering: -15
+    security clearance: -20
+    us citizen: -18
+    citizens only: -20
+    must be located in: -6
+    onsite: -6
+    on-site: -6
+    hybrid: -3
+    intern: -20
+    internship: -20
+    junior: -8
+    entry level: -12
+    human resources: -25
+    people operations: -25
+    talent acquisition: -25
+    people &: -15
+    hr specialist: -25
+    hr manager: -25
+    recruiter: -20
+    talent partner: -20
+    people and culture: -25
+  modifiers:
+    tier_1_title_match: 25
+    tier_2_title_match: 12
+    bonus_domain_match: 18
+    salary_disclosed: 5
+  score_divisor: 165
+sources:
+  remotive: true
+  remoteok: true
+  arbeitnow: true
+  himalayas: true
+  hn_whoishiring: true
+  weworkremotely: true
+  jobicy: true
+  workingnomads: true
+  getonboard: true
+  jooble: true
+  greenhouse: true
+  lever: true
+  ashby: true
+  trinidad: true
+  trinidad_findworktt: true
+  trinidad_jobstt: true
+  trinidad_trinidadjob: true
+  trinidad_caribbeanjobs: true
+  trinidad_employtt: true
+  trinidad_islandjobhunt: true
+  trinidad_caribbeanjobsonline: true
+  trinidad_evecaribbean: true
+  trinidad_digicel: true
+keep_all_trinidad: true
+trinidad_limit_per_source: 40
+trinidad_custom_sites: []
+company_boards:
+  greenhouse:
+  - anthropic
+  - scaleai
+  - discord
+  - flexport
+  - affirm
+  - gusto
+  - checkr
+  - lattice
+  - mercury
+  - airtable
+  lever:
+  - palantir
+  - matchgroup
+  ashby:
+  - openai
+  - ramp
+  - linear
+  - baseten
+  - modal
+  - suno
+  - clerk
+search_terms:
+- python
+- django
+- forward deployed
+- solutions engineer
+- ai engineer
+- data engineer
+- llm
+- automation
+- backend
+min_score_to_include: 35
+max_age_days: 30
+max_greenhouse_details_per_board: 12
+cover_letter:
+  provider: auto
+  claude_code_model: sonnet
+  ollama_model: llama3.2:1b
+  anthropic_model: claude-sonnet-5

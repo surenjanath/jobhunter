@@ -1,0 +1,27 @@
+# Optional: run a scan in GitHub Actions and download the results as an artifact.
+# Manual only. Scan results are NOT committed to the repository (they are your personal job data).
+# To schedule it, add:   schedule: [{cron: "0 11 * * *"}]   under `on:`
+name: Scan (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Scan (dry run, no Google Sheets write)
+        working-directory: jobhunt
+        run: python -m src.run --dry-run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jobs-${{ github.run_number }}
+          path: jobhunt/output/jobs_latest.*
+          retention-days: 14

@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block page %}
+      <section class="sheet" id="analyticsCard">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+          <h1 class="sheet-title">Analytics <span class="quiet">· Your strengths against the market ·</span></h1>
+          <span class="quiet" id="analyticsMeta"></span>
+        </div>
+        <div id="anRoot"><p class="quiet">Reading your search…</p></div>
+      </section>
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/analytics.js' %}?v=1"></script>
+{% endblock %}

@@ -1,0 +1,13 @@
+# Web app
+Django>=5.2
+djangorestframework>=3.15
+
+# Scanner
+requests>=2.31.0
+PyYAML>=6.0.1
+
+# Optional integrations (each is imported lazily; the app runs without them)
+gspread>=6.1.0          # Google Sheets sync
+google-auth>=2.29.0     # Google Sheets auth
+anthropic>=0.40.0       # Anthropic API backend for cover letters / AI features
+flask>=3.0.0            # legacy Flask dashboard (jobhunt/dashboard.py) only

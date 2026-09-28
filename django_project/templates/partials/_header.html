@@ -1,0 +1,20 @@
+  <header class="mast">
+    <nav class="nav primary" id="mainNav" aria-label="Sections">
+      {% for item in nav %}<a href="{{ item.url }}"{% if item.key == page %} class="active" aria-current="page"{% endif %}>{{ item.label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="mast-right">
+            <span id="liveStatus">Idle</span>
+      <span class="quiet" id="meta">loading</span>
+      <span id="healthDot" class="sr"></span>
+      <span id="navJobs" class="sr"></span>
+      <span id="dbInfo" class="sr"></span>
+      <span id="providerPill" class="sr"></span>
+      <span id="footStats" class="sr"></span>
+      <a href="#" id="navPalette" title="Command palette (Ctrl/⌘+K)">⌘K</a>
+      <a href="#" id="navHelp" title="Keyboard shortcuts (?)">?</a>
+      <a href="/api/calendar.ics" title="Follow-ups and closing dates as a calendar file">Calendar</a>
+      <a href="#" id="navExport">Export</a>
+      <a href="#" id="navTheme">Theme</a>
+    </div>
+  </header>

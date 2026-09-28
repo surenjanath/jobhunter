@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block page %}
+      <section class="sheet" id="sheetPipeline">
+        <h1 class="sheet-title">Pipeline <span class="quiet">· Follow-ups ·</span></h1>
+        <div class="figures" id="pipeFigures"></div>
+        <div id="pipelineBody"></div>
+      </section>
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/pipeline.js' %}?v=1"></script>
+{% endblock %}

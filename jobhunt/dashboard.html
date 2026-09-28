@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JobHunter — Professional Job Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f8fafc; --panel:#ffffff; --panel-2:#f1f5f9; --ink:#0f172a; --muted:#64748b; --muted-2:#94a3b8;
+    --line:#e2e8f0; --line-2:#f1f5f9; --accent:#4f46e5; --accent-2:#4338ca; --accent-soft:#eef2ff;
+    --good:#059669; --good-soft:#ecfdf5; --good-line:#a7f3d0;
+    --warn:#d97706; --warn-soft:#fffbeb; --warn-line:#fde68a;
+    --bad:#dc2626; --bad-soft:#fef2f2; --bad-line:#fecaca;
+    --mono:'JetBrains Mono', ui-monospace, monospace;
+    --sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --radius:12px; --radius-sm:8px; --radius-lg:16px;
+    --shadow:0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md:0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+    --shadow-lg:0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.05);
+  }
+  [data-theme="dark"]{
+    --bg:#020617; --panel:#0f172a; --panel-2:#1e293b; --ink:#f1f5f9; --muted:#94a3b8; --muted-2:#64748b;
+    --line:#1e293b; --line-2:#0f172a; --accent:#6366f1; --accent-2:#4f46e5; --accent-soft:#1e1b4b;
+    --good:#10b981; --good-soft:#042e1f; --good-line:#065f46;
+    --warn:#f59e0b; --warn-soft:#281a03; --warn-line:#92400e;
+    --bad:#ef4444; --bad-soft:#2a0a0a; --bad-line:#7f1d1d;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+  /* Layout */
+  .app{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+  @media(max-width:900px){.app{grid-template-columns:1fr} .side{display:none}}
+  .side{background:var(--panel);border-right:1px solid var(--line);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  .side-head{padding:20px 18px 14px;border-bottom:1px solid var(--line)}
+  .logo{display:flex;align-items:center;gap:10px}
+  .logo-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#06b6d4);display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px}
+  .logo-type{font-weight:800;letter-spacing:-.02em} .logo-type span{font-weight:400;color:var(--muted)}
+  .nav{padding:10px 8px;flex:1;overflow:auto}
+  .nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--muted);font-weight:500;font-size:13.5px}
+  .nav a.active{background:var(--accent-soft);color:var(--accent)}
+  .nav a:hover{background:var(--panel-2);color:var(--ink)}
+  .nav .sep{height:1px;background:var(--line);margin:10px 6px}
+  .main{padding:18px 20px 24px;max-width:1280px;width:100%;margin:0 auto}
+  .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .top h1{font-size:18px;font-weight:700;letter-spacing:-.015em;margin:0}
+  .sub{color:var(--muted);font-size:13px}
+  .health{width:9px;height:9px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px var(--good-soft)}
+  .health.bad{background:var(--bad);box-shadow:0 0 0 4px var(--bad-soft)}
+  .pill{font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;background:var(--panel);border:1px solid var(--line);color:var(--muted)}
+  /* Cards */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+  @media(max-width:1100px){.stats{grid-template-columns:repeat(3,1fr)}} @media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .stat{padding:14px 14px;border-radius:var(--radius);background:var(--panel);border:1px solid var(--line);position:relative;overflow:hidden}
+  .stat b{font-size:22px;font-weight:800;letter-spacing:-.02em;display:block}
+  .stat span{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .stat::after{content:'';position:absolute;inset:0;background:radial-gradient(300px 80px at 85% 0%, var(--accent-soft), transparent 60%);opacity:.6;pointer-events:none}
+  /* Toolbar */
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  button{font:inherit;font-size:13px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;transition:.15s;font-weight:500}
+  button:hover{border-color:var(--muted-2);transform:translateY(-1px);box-shadow:var(--shadow)}
+  button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button.primary:hover{background:var(--accent-2)}
+  button.ghost{background:transparent}
+  button.sm{padding:6px 10px;font-size:12px}
+  /* Console */
+  #console{background:#0b1220;color:#cbd5e1;font-family:var(--mono);font-size:12.5px;line-height:1.6;padding:14px;border-radius:var(--radius);height:180px;overflow:auto;white-space:pre-wrap;word-break:break-word;border:1px solid #1e293b}
+  [data-theme="dark"] #console{background:#020617}
+  #console .ok{color:#6ee7a8} #console .bad{color:#fda4af} #console .warn{color:#fcd34d} #console .dim{color:#64748b}
+  /* Filters */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--panel-2);border-radius:var(--radius) var(--radius) 0 0}
+  input[type=search],select{font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+  input[type=search]{flex:1;min-width:180px}
+  input[type=search]:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  /* Table */
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap}
+  th:hover{color:var(--ink)}
+  td{padding:12px;border-bottom:1px solid var(--line-2);vertical-align:top;font-size:13.5px}
+  tbody tr:hover{background:var(--accent-soft)}
+  .fit{font-weight:700;font-variant-numeric:tabular-nums;padding:3px 8px;border-radius:20px;font-size:11px;display:inline-block;min-width:36px;text-align:center;border:1px solid}
+  .t1{background:var(--good-soft);color:var(--good);border-color:var(--good-line)}
+  .t2{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+  .t3{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
+  .role{font-weight:600;cursor:pointer}
+  .role:hover{color:var(--accent)}
+  .co{color:var(--muted);font-size:12px}
+  .flag{font-size:11px;padding:3px 7px;border-radius:20px;margin:2px 3px 0 0;display:inline-block;font-weight:500;border:1px solid var(--line);background:var(--panel-2);color:var(--muted)}
+  .flag.g{background:var(--good-soft);color:var(--good);border-color:var(--good-line)}
+  .flag.b{background:var(--bad-soft);color:var(--bad);border-color:var(--bad-line)}
+  .status-sel{font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel)}
+  .empty{padding:40px 20px;text-align:center;color:var(--muted)}
+  /* Dialog */
+  dialog{border:none;border-radius:16px;padding:0;max-width:860px;width:94vw;box-shadow:var(--shadow-lg);background:var(--panel);color:var(--ink)}
+  dialog::backdrop{background:rgba(2,6,23,.6);backdrop-filter:blur(6px)}
+  .dh{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+  .dh h3{margin:0;font-size:15px;font-weight:700}
+  .tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel-2);overflow:auto}
+  .tab{padding:11px 14px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--panel)}
+  .tab-body{padding:18px;max-height:62vh;overflow:auto}
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px}
+  .kpi .box{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
+  .kpi .box b{font-size:18px;display:block}
+  .kpi .box span{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600}
+  .chip{padding:4px 9px;border-radius:20px;font-size:12px;margin:3px;display:inline-block;font-weight:500;border:1px solid var(--line)}
+  .chip.have{background:var(--good-soft);color:var(--good);border-color:var(--good-line)}
+  .chip.gap{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
+  .chip.neutral{background:var(--panel-2);color:var(--muted)}
+  .bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0}
+  .bar i{display:block;height:100%;border-radius:4px}
+  .bar.good i{background:var(--good)} .bar.warn i{background:var(--warn)} .bar.bad i{background:var(--bad)} .bar.accent i{background:var(--accent)}
+  .list{margin:0;padding:0;list-style:none}
+  .list li{padding:8px 10px;border-bottom:1px solid var(--line-2);font-size:13.5px}
+  .verdict{padding:12px;border-radius:10px;font-weight:700;text-align:center;margin-bottom:12px;border:1px solid}
+  .verdict.High{background:var(--good-soft);color:var(--good);border-color:var(--good-line)}
+  .verdict.Medium{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+  .verdict.Low{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
+  .verdict.Long{background:var(--bad-soft);color:var(--bad);border-color:var(--bad-line)}
+  .banner{padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:10px;border:1px solid var(--line)}
+  .banner.w{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
+  .banner.g{background:var(--good-soft);color:var(--good);border-color:var(--good-line)}
+  .df{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;align-items:center}
+  .note{font-size:12px;color:var(--muted);margin-right:auto}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="side-head">
+      <div class="logo"><div class="logo-mark">JH</div><div><div class="logo-type">JobHunter <span>— Suren</span></div><div class="co" style="font-size:11px">Professional Intelligence • Trinidad • UTC-4</div></div></div>
+    </div>
+    <nav class="nav">
+      <a href="#" class="active" data-view="jobs">◧ Jobs <span class="pill" id="navJobs" style="margin-left:auto">—</span></a>
+      <a href="#" data-view="analytics">◈ Analytics</a>
+      <a href="#" data-view="resume">◇ Resume Match</a>
+      <a href="#" data-view="trinidad">🇹🇹 Trinidad</a>
+      <div class="sep"></div>
+      <a href="/health" target="_blank">⬡ Health</a>
+      <a href="/api/stats" target="_blank">⬢ Stats API</a>
+      <a href="#" id="navExport">⤓ Export CSV</a>
+      <a href="#" id="navTheme">◐ Theme</a>
+      <div class="sep"></div>
+      <div class="co" style="padding:8px 10px;font-size:11px;line-height:1.5">
+        <b>Role Fit Map</b><br>
+        Tier 1: FDE / Solutions / Automation<br>
+        Tier 2: AI Engineer / Data Eng<br>
+        <span id="roleFit">—</span>
+      </div>
+    </nav>
+    <div style="padding:12px;border-top:1px solid var(--line)" class="co">
+      <div style="font-size:11px">JobHunter (legacy Flask UI — the Django app in django_project/ is the maintained one)</div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="top">
+      <h1 id="pageTitle">Jobs</h1>
+      <span class="health" id="healthDot" title="health"></span>
+      <span class="sub" id="meta">loading…</span>
+      <span style="flex:1"></span>
+      <span class="pill" id="dbInfo">DB —</span>
+      <span class="pill" id="providerPill">auto</span>
+      <a id="sheetLink" href="#" target="_blank" style="display:none"><button class="sm">Open Sheet</button></a>
+    </div>
+    <div id="banners"></div>
+    <div id="coach" class="card" style="padding:12px 14px;margin-bottom:10px;display:none;background:linear-gradient(135deg,var(--accent-soft),var(--panel));border:1px solid var(--accent);">
+      <div style="display:flex;gap:10px;align-items:start">
+        <div style="font-size:18px">🤖</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13px;color:var(--accent)">AI Coach — Daily Brief <span class="co" id="coachMeta" style="font-weight:400"></span></div>
+          <div id="coachText" class="co" style="font-size:13px;margin-top:4px">Loading AI brief…</div>
+        </div>
+        <button class="sm ghost" onclick="loadCoach(true)" title="Regenerate">↻</button>
+      </div>
+    </div>
+    <div id="backends" style="margin-bottom:10px"></div>
+    <div class="toolbar">
+      <button class="primary" id="bScan">Run scan</button>
+      <button id="bSync">Scan + sync</button>
+      <button id="bLive">Live check</button>
+      <button id="bTests">Tests</button>
+      <select id="prov" style="margin-left:auto">
+        <option value="auto">auto</option>
+        <option value="claude_code">Claude Code</option>
+        <option value="ollama">Ollama</option>
+        <option value="anthropic">API</option>
+        <option value="template">Template</option>
+      </select>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div id="console"><span style="color:var(--muted)">Backend ready. Press Run scan or wait for cron.</span></div>
+
+    <div class="card" id="jobsCard">
+      <div class="filters">
+        <input type="search" id="q" placeholder="Search title, company, location, why…">
+        <select id="tier"><option value="">All tiers</option><option value="65">Tier 1 (65+)</option><option value="50">Tier 2 (50+)</option></select>
+        <select id="src"><option value="">All sources</option></select>
+        <select id="statusFilter"><option value="">All statuses</option><option>New</option><option>Shortlisted</option><option>Applied</option><option>Interviewing</option><option>Offer</option><option>Rejected</option><option>Passed on it</option></select>
+        <select id="sortSel"><option value="fit">Sort: Fit</option><option value="likelihood">Sort: Likelihood</option><option value="recent">Sort: Recent</option></select>
+        <button class="sm" id="viewToggle" title="Toggle Kanban/Table">◧ Kanban</button>
+        <label style="font-size:13px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="localOnly"> 🇹🇹</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="clean"> Hide blockers</label>
+      </div>
+      <div id="tableWrap"></div>
+      <div id="kanbanWrap" style="display:none;padding:12px;overflow:auto">
+        <div id="kanbanBoard" style="display:flex;gap:12px;min-width:800px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="analyticsCard" style="display:none;padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <h3 style="margin:0">Analytics</h3><span class="pill" id="analyticsMeta">—</span>
+      </div>
+      <div id="analyticsBody" class="co">Loading…</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+        <div class="card" style="padding:12px"><h4 style="margin:0 0 6px;font-size:13px">Fit Distribution</h4><canvas id="chartFit" height="160"></canvas></div>
+        <div class="card" style="padding:12px"><h4 style="margin:0 0 6px;font-size:13px">Likelihood</h4><canvas id="chartLike" height="160"></canvas></div>
+        <div class="card" style="padding:12px"><h4 style="margin:0 0 6px;font-size:13px">By Source (avg fit)</h4><canvas id="chartSrc" height="160"></canvas></div>
+        <div class="card" style="padding:12px"><h4 style="margin:0 0 6px;font-size:13px">Top Gaps</h4><canvas id="chartGaps" height="160"></canvas></div>
+      </div>
+      <div id="insights" style="margin-top:14px"></div>
+    </div>
+
+    <div class="card" id="resumeCard" style="display:none;padding:16px">
+      <h3 style="margin:0 0 8px">Resume Match</h3>
+      <div id="resumeBody" class="co">Loading…</div>
+    </div>
+
+    <div class="card" id="trinidadCard" style="display:none;padding:16px">
+      <h3 style="margin:0 0 8px">Trinidad & Tobago — Local Market</h3>
+      <div class="co">Local boards: FindWorkTT, JobsTT, TrinidadJob, CaribbeanJobs, EmployTT. T&T jobs get geography 92 and no visa penalty.</div>
+      <div id="trinidadBody" style="margin-top:12px"></div>
+    </div>
+
+    <div class="co" style="margin-top:14px"><span id="footStats">—</span> · Local: 127.0.0.1 · <a href="/health">health</a> · <a href="/api/stats">stats</a></div>
+  </main>
+</div>
+
+<dialog id="dlg">
+  <div class="dh"><h3 id="dlgTitle">Cover letter</h3><button class="sm" onclick="dlg.close()">Close</button></div>
+  <div id="letter" style="padding:16px;white-space:pre-wrap;font-size:14px;line-height:1.6;max-height:56vh;overflow:auto"></div>
+  <div class="df"><span class="note" id="dlgNote"></span><button class="sm" id="bCopy">Copy</button><a id="dlgApply" target="_blank"><button class="sm primary">Open posting</button></a></div>
+</dialog>
+
+<dialog id="jobDlg" class="wide">
+  <div class="dh"><div><h3 id="jobTitle">Job details</h3><div class="co" id="jobSub">—</div></div><button class="sm" onclick="jobDlg.close()">Close</button></div>
+  <div class="tabs" id="jobTabs" style="overflow:auto">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="tech">Tech</button>
+    <button class="tab" data-tab="needs">Needs</button>
+    <button class="tab" data-tab="likelihood">Likelihood</button>
+    <button class="tab" data-tab="ats">ATS</button>
+    <button class="tab" data-tab="interview">Interview</button>
+    <button class="tab" data-tab="salary">Salary</button>
+    <button class="tab" data-tab="ai">AI Match</button>
+    <button class="tab" data-tab="tailor">Tailor</button>
+    <button class="tab" data-tab="raw">Raw</button>
+  </div>
+  <div id="jobBody" class="tab-body">Loading…</div>
+  <div class="df"><span class="note" id="jobNote"></span><button class="sm" id="jobCopy">Copy Link</button><button class="sm" id="jobCoverBtn">Generate Letter</button><a id="jobApply" target="_blank"><button class="sm primary">Open Posting</button></a></div>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+let JOBS=[], SORT={key:'fit_score',dir:-1}, POLL=null, CURSOR=0;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tierClass=n=> n>=65?'t1':n>=50?'t2':'t3';
+const GOOD=/good\)/i, BAD=/clearance|citizens only|permanent residency|10\+|PhD|no sponsorship|Non-engineering/i;
+const flagClass=f=> GOOD.test(f)?'g':BAD.test(f)?'b':'';
+const themeBtn=$('#navTheme');
+function setTheme(t){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('jh_theme',t)}
+setTheme(localStorage.getItem('jh_theme')|| (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
+if(themeBtn) themeBtn.onclick=()=>setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
+document.getElementById('navExport').onclick=()=>{
+  const rows=filtered(); const cols=["fit_score","tier","title","company","location","salary","source","posted_at","url","why","flags"];
+  const csv=[cols.join(",")].concat(rows.map(j=>cols.map(k=>`"${String(j[k]||'').replace(/"/g,'""')}"`).join(","))).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download=`jobhunt_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+};
+async function refresh(){
+  const r=await fetch('/api/state'); const d=await r.json(); JOBS=d.jobs||[];
+  $('#meta').textContent=d.generated?`${JOBS.length} jobs · ${new Date(d.generated).toLocaleString()}`:'no scan yet';
+  try{const h=await fetch('/health').then(x=>x.json()); $('#healthDot').className='health'+(h.ok?'':' bad'); $('#healthDot').title=h.ok?`ok · ${h.jobs} jobs`: 'down'; }catch(e){$('#healthDot').className='health bad'}
+  const bk=d.backends||{}; $('#backends').innerHTML=Object.entries(bk).map(([k,v])=>`<span class="flag ${v.available?'g':''}" title="${esc(v.detail)}">${esc(k)}: ${v.available?'ready':'off'}</span>`).join('') + (d.stats?` <span class="flag">DB tier1:${d.stats.tier1} tier2:${d.stats.tier2}</span>`:'');
+  if(d.provider) $('#prov').value=d.provider; $('#providerPill').textContent=d.provider||'auto';
+  $('#dbInfo').textContent=`DB: ${d.stats?d.stats.total:JOBS.length} jobs`;
+  const b=[]; if(!d.sheet_configured) b.push('<div class="banner w"><b>SHEET_ID not set.</b> <code>source .env</code> to enable Sheets.</div>');
+  const anyLLM=Object.entries(bk).some(([k,v])=>k!=='template'&&v.available);
+  if(!anyLLM) b.push('<div class="banner w"><b>Template mode.</b> Ollama ready (9 models) · Claude rate-limited. <a href="#" onclick="prov.value=\'ollama\';prov.dispatchEvent(new Event(\'change\'))">Use Ollama</a></div>');
+  if(d.stats) b.push(`<div class="banner g">DB: ${d.stats.total} · ${d.stats.tier1} Tier 1 · ${Object.entries(d.stats.by_source||{}).map(([k,v])=>`${k}:${v}`).join(' · ')}</div>`);
+  $('#banners').innerHTML=b.join('');
+  if(d.sheet_id){$('#sheetLink').href=`https://docs.google.com/spreadsheets/d/${d.sheet_id}/edit`; $('#sheetLink').style.display='';}
+  const t1=JOBS.filter(j=>j.fit_score>=65).length, t2=JOBS.filter(j=>j.fit_score>=50&&j.fit_score<65).length, eor=JOBS.filter(j=>/EOR|Timezone-friendly|sponsorship \(good/i.test(j.flags||'')).length, blocked=JOBS.filter(j=>BAD.test(j.flags||'')).length;
+  $('#stats').innerHTML=[['Total',JOBS.length],['Tier 1',t1],['Tier 2',t2],['Intl-friendly',eor],['Blocked',blocked],['Letters',(d.letters||[]).length]].map(([l,v])=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  const srcs=[...new Set(JOBS.map(j=>(j.source||'').split(':')[0]))].sort(); const cur=$('#src').value;
+  $('#src').innerHTML='<option value="">All sources</option>'+srcs.map(s=>`<option ${s===cur?'selected':''}>${esc(s)}</option>`).join('');
+  $('#footStats').textContent=`${JOBS.length} jobs · ${t1} tier-1`; $('#navJobs').textContent=JOBS.length;
+  const rm=JOBS.filter(j=> (j.source||'').includes('trinidad') || /trinidad|tobago/i.test(j.location||'')).length; // not used
+  setBusy(d.busy); render();
+}
+function setBusy(busy){['#bScan','#bSync','#bLive','#bTests'].forEach(id=>$(id).disabled=busy); if(busy&&!POLL) POLL=setInterval(pollLogs,700)}
+async function pollLogs(){const r=await fetch('/api/logs?since='+CURSOR); const d=await r.json(); if(d.lines.length){CURSOR=d.next; const c=$('#console'); c.insertAdjacentHTML('beforeend',d.lines.map(l=>{const cls=/\[FAIL\]|!!!|Traceback|FAILED|\bERROR\b/.test(l)?'bad':/\[OK  \]|\[PASS\]|passed|finished, exit code 0/.test(l)?'ok':/\[WARN\]|WARN|warning/i.test(l)?'warn':''; return `<span class="${cls}">${esc(l)}</span>`}).join('\n')+'\n'); c.scrollTop=c.scrollHeight;} if(!d.busy){clearInterval(POLL);POLL=null;setBusy(false);refresh();}}
+async function launch(url,body){$('#console').innerHTML='';CURSOR=0; const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}); const d=await r.json(); if(!d.ok){alert(d.error||'could not start');return;} setBusy(true);}
+$('#prov').onchange=async()=>{await fetch('/api/provider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:$('#prov').value})});};
+document.getElementById('bScan').onclick=()=>launch('/api/scan',{dry_run:true});
+document.getElementById('bSync').onclick=()=>launch('/api/scan',{dry_run:false});
+document.getElementById('bLive').onclick=()=>launch('/api/live-check');
+document.getElementById('bTests').onclick=()=>launch('/api/tests');
+function filtered(){
+  const q=$('#q').value.toLowerCase().trim(), min= +$('#tier').value||0, src=$('#src').value, status=$('#statusFilter').value, clean=$('#clean').checked, localOnly=$('#localOnly').checked, sort=$('#sortSel').value;
+  let rows=JOBS.filter(j=>{
+    if(j.fit_score<min) return false;
+    if(src && !(j.source||'').startsWith(src)) return false;
+    if(clean && BAD.test(j.flags||'')) return false;
+    if(status && (j.app_status||'New')!==status) return false;
+    if(localOnly){const isTT=/findworktt|jobstt|trinidad|caribbeanjobs|employtt/i.test(j.source)||/trinidad|tobago/i.test(j.location||''); if(!isTT) return false;}
+    if(q){const hay=`${j.title} ${j.company} ${j.location} ${j.why} ${j.flags} ${j.app_status||''}`.toLowerCase(); if(!hay.includes(q)) return false;}
+    return true;
+  });
+  if(sort==='likelihood'){ rows.sort((a,b)=> (b.likelihood?.likelihood||b.fit_score) - (a.likelihood?.likelihood||a.fit_score)); }
+  else if(sort==='recent'){ rows.sort((a,b)=> (b.posted_at||'').localeCompare(a.posted_at||'')); }
+  else { rows.sort((a,b)=>{const k=SORT.key, va=a[k]??'', vb=b[k]??''; return typeof va==='number' ? (va-vb)*SORT.dir : String(va).localeCompare(String(vb))*SORT.dir;});}
+  return rows;
+}
+function render(){
+  const rows=filtered(); if(!JOBS.length){$('#tableWrap').innerHTML=`<div class="empty">No results. <b>Run scan</b> or <code>python -m src.run --dry-run</code></div>`;return;} if(!rows.length){$('#tableWrap').innerHTML=`<div class="empty">No matches.</div>`;return;}
+  const th=(k,l)=>`<th data-k="${k}">${l}${SORT.key===k?(SORT.dir<0?' ↓':' ↑'):''}</th>`;
+  $('#tableWrap').innerHTML=`<table><thead><tr>${th('fit_score','Fit')}${th('title','Role')}${th('company','Company')}${th('location','Location')}${th('likelihood','Likelihood')}${th('posted_at','Posted')}<th>Status</th><th></th></tr></thead><tbody>${rows.map(j=>{
+    const like=j.likelihood; const likeBadge= like ? `<span class="flag ${like.verdict==='High'?'g':like.verdict==='Medium'?'':'b'}" title="${esc(like.advice||'')}">${like.verdict} ${like.likelihood}%</span>` : `<span class="flag">${j.fit_score}</span>`;
+    const isTT=/findworktt|jobstt|trinidad|caribbeanjobs|employtt/i.test(j.source)||/trinidad|tobago/i.test(j.location||'');
+    return `<tr>
+      <td><span class="fit ${tierClass(j.fit_score)}">${j.fit_score}</span></td>
+      <td><div class="role" data-details="${esc(j.job_id)}">${esc(j.title)}</div><div class="co">${esc((j.why||'').slice(0,90))} ${isTT?'<span class="flag g">🇹🇹 T&T</span>':''}</div></td>
+      <td>${esc(j.company)}<div class="co">${esc((j.source||'').split(':')[0])}</div></td>
+      <td class="co">${esc(j.location||'—')}</td>
+      <td>${likeBadge}</td>
+      <td class="co">${esc(j.posted_at||'—')}</td>
+      <td><select class="status-sel" data-status="${esc(j.job_id)}">${["New","Shortlisted","Applied","Interviewing","Offer","Rejected","Passed on it"].map(o=>`<option ${o===(j.app_status||'New')?'selected':''}>${o}</option>`).join('')}</select></td>
+      <td style="white-space:nowrap"><button class="sm" data-details="${esc(j.job_id)}">Details</button> <button class="sm" data-cover="${esc(j.job_id)}">Letter</button> <a href="${esc(j.url)}" target="_blank"><button class="sm">↗</button></a></td>
+    </tr>`}).join('')}</tbody></table>`;
+  document.querySelectorAll('th[data-k]').forEach(el=>el.onclick=()=>{const k=el.dataset.k; SORT={key:k,dir:SORT.key===k?-SORT.dir:(k==='fit_score'?-1:1)}; render();});
+  document.querySelectorAll('[data-cover]').forEach(el=>el.onclick=()=>draftLetter(el.dataset.cover, el));
+  document.querySelectorAll('[data-details]').forEach(el=>el.onclick=()=>openJob(el.dataset.details));
+  document.querySelectorAll('[data-status]').forEach(el=>el.onchange=async()=>{const jid=el.dataset.status, st=el.value; el.disabled=true; await fetch(`/api/jobs/${encodeURIComponent(jid)}/status`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st})}); const j=JOBS.find(x=>x.job_id===jid); if(j) j.app_status=st; el.disabled=false;});
+}
+let CURRENT_JOB=null, CURRENT_TAB='overview';
+document.querySelectorAll('#jobTabs .tab').forEach(el=>el.onclick=()=>{document.querySelectorAll('#jobTabs .tab').forEach(x=>x.classList.remove('active')); el.classList.add('active'); CURRENT_TAB=el.dataset.tab; if(CURRENT_JOB) renderJobTab(CURRENT_JOB);});
+async function openJob(jobId){
+  const j=JOBS.find(x=>x.job_id===jobId); if(!j) return;
+  $('#jobTitle').textContent=j.title; $('#jobSub').textContent=`${j.company} · ${j.location||'—'} · ${j.source}`; $('#jobApply').href=j.url||'#'; $('#jobNote').textContent=`Fit ${j.fit_score} · ${j.tier} · ${j.posted_at||'—'}`; $('#jobBody').innerHTML='<span class="co">Analyzing…</span>'; jobDlg.showModal(); CURRENT_JOB=j; CURRENT_TAB='overview'; document.querySelectorAll('#jobTabs .tab').forEach((x,i)=>x.classList.toggle('active',i===0));
+  try{const r=await fetch(`/api/jobs/${encodeURIComponent(jobId)}/details`); const d=await r.json(); if(d.error) throw new Error(d.error); CURRENT_JOB={...j, ...d.job, details:d.details, likelihood:d.likelihood}; Object.assign(j, CURRENT_JOB); renderJobTab(CURRENT_JOB);}catch(e){$('#jobBody').innerHTML=`<div class="banner w">${esc(e.message)}</div><pre class="co">${esc(j.description||'').slice(0,3000)}</pre>`;}
+}
+function renderJobTab(j){
+  const d=j.details, like=j.likelihood; let html='';
+  if(CURRENT_TAB==='overview'){
+    const src=(j.source||'').split(':')[0]; const isTT=/findworktt|jobstt|trinidad|caribbeanjobs|employtt/i.test(j.source)||/trinidad|tobago/i.test(j.location||'');
+    html=`<div class="kpi"><div class="box"><b>${j.fit_score}</b><span>Fit</span></div><div class="box"><b>${like?like.likelihood:'—'}</b><span>Likelihood</span></div><div class="box"><b>${esc(j.tier||'—').split('—')[0]}</b><span>Tier</span></div><div class="box"><b>${esc(src)}</b><span>Source</span></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><span class="flag ${j.fit_score>=65?'g':j.fit_score>=50?'':'b'}">Fit ${j.fit_score}</span>${like?`<span class="flag ${like.verdict==='High'?'g':like.verdict==='Medium'?'':'b'}">Likelihood ${like.likelihood}% · ${like.verdict}</span>`:''}${isTT?'<span class="flag g">🇹🇹 Local</span>':''}${j.remote?'<span class="flag g">Remote</span>':''}<span class="flag">Posted ${esc(j.posted_at||'—')}</span>${j.salary?`<span class="flag">💰 ${esc(j.salary)}</span>`:''}</div>
+      <div class="banner ${like&&like.verdict==='High'?'g':like&&like.verdict==='Long shot'?'w':''}"><b>${like?esc(like.verdict)+' — ':''}${like?esc(like.advice):esc(j.why||'')}</b>${like&&like.blockers.length?`<br><span class="co">Blockers: ${esc(like.blockers.join(' · '))}</span>`:''}</div>
+      <h4 style="margin:12px 0 6px">Why matched</h4><div class="co">${esc(j.why||'—')}</div>
+      <h4 style="margin:12px 0 6px">Flags</h4><div>${(j.flags||'').split('|').filter(Boolean).map(f=>`<span class="flag ${flagClass(f)}">${esc(f.trim())}</span>`).join('')||'<span class="co">None</span>'}</div>
+      <h4 style="margin:12px 0 6px">Facts</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" class="co"><div><b>Company:</b> ${esc(j.company)}</div><div><b>Location:</b> ${esc(j.location||'—')}</div><div><b>Source:</b> ${esc(j.source)}</div><div><b>Posted:</b> ${esc(j.posted_at||'—')}</div><div><b>URL:</b> <a href="${esc(j.url)}" target="_blank">Open</a></div><div><b>Alt:</b> ${esc(j.alt_urls||'—').slice(0,70)}</div></div>`;
+  } else if(CURRENT_TAB==='tech'){
+    if(!d) html='<span class="co">No tech data</span>'; else {
+      const techs=d.technologies_with_status||{}; let total=d.summary?`${d.summary.have}/${d.summary.total_techs} you have (${d.summary.coverage}%)`:'';
+      html=`<div class="banner g"><b>Coverage: ${esc(total)}</b> — green have, amber gap</div>`;
+      for(const [cat,items] of Object.entries(techs)){ html+=`<h4 style="margin:12px 0 6px">${esc(cat)} <span class="co">(${items.length})</span></h4>`; html+=items.map(it=>`<span class="chip ${it.have?'have':'gap'}">${esc(it.tech)} ${it.have?'✓':'○'}</span>`).join('');}
+      if(!Object.keys(techs).length) html+='<div class="co">Generalist role — no specific tech</div>';
+      html+=`<div style="margin-top:12px" class="bar ${d.summary.coverage>=60?'good':d.summary.coverage>=35?'warn':'bad'}"><i style="width:${d.summary.coverage}%"></i></div>`;
+    }
+  } else if(CURRENT_TAB==='needs'){
+    if(!d) html='<span class="co">No data</span>'; else {
+      const req=d.requirements||{};
+      html=`<div class="kpi"><div class="box"><b>${esc(req.experience_raw||'—')}</b><span>Experience</span></div><div class="box"><b>${esc(req.education_raw||'—')}</b><span>Education</span></div><div class="box"><b>${esc(req.remote_raw||'—')}</b><span>Remote</span></div><div class="box"><b>${esc(req.employment_raw||'—')}</b><span>Type</span></div></div>
+        <h4>What they want</h4><ul class="list">${(req.needs||[]).map(n=>`<li>▸ ${esc(n)}</li>`).join('')||'<li class="co">See Description tab</li>'}</ul>${req.is_non_eng?'<div class="banner w">Non-engineering title</div>':''}`;
+    }
+  } else if(CURRENT_TAB==='likelihood'){
+    if(!like) html='<span class="co">No likelihood</span>'; else {
+      const b=like.breakdown||{};
+      html=`<div class="verdict ${esc(like.verdict)}">${esc(like.verdict)} — ${like.likelihood}%</div><div class="banner">${esc(like.advice)}</div>
+        <h4>Breakdown</h4><div class="kpi">${Object.entries(b).map(([k,v])=>`<div class="box"><b>${v}</b><span>${esc(k.replace('_',' '))}</span><div class="bar ${v>=70?'good':v>=45?'warn':'bad'}"><i style="width:${v}%"></i></div></div>`).join('')}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px"><div><h4>Strengths</h4><ul class="list">${like.strengths.map(s=>`<li>✓ ${esc(s)}</li>`).join('')||'<li class="co">—</li>'}</ul></div><div><h4>Gaps</h4><ul class="list">${like.gaps.map(s=>`<li>○ ${esc(s)}</li>`).join('')||'<li class="co">—</li>'}</ul></div></div>
+        ${like.blockers.length?`<h4>Blockers</h4><div>${like.blockers.map(b=>`<span class="flag b">${esc(b)}</span>`).join('')}</div>`:''}`;
+    }
+  } else if(CURRENT_TAB==='ats'){
+    html='<span class="co">Loading ATS…</span>';
+    $('#jobBody').innerHTML=html;
+    fetch(`/api/jobs/${encodeURIComponent(j.job_id)}/ats`).then(r=>r.json()).then(d=>{
+      if(d.error) throw new Error(d.error);
+      const ats=d;
+      html=`<div class="kpi"><div class="box"><b>${ats.score}%</b><span>ATS Score</span></div><div class="box"><b>${ats.breakdown.keywords}%</b><span>Keywords</span></div><div class="box"><b>${ats.breakdown.format}%</b><span>Format</span></div><div class="box"><b>${ats.words}</b><span>Words</span></div></div>
+        <div class="verdict ${ats.score>=80?'High':ats.score>=65?'Medium':ats.score>=50?'Low':'Long'}">${esc(ats.verdict)}</div>
+        <h4>Must-have keywords (JD)</h4><div>${ats.must_have.map(k=>`<span class="chip ${ats.have.includes(k)?'have':'gap'}">${esc(k)} ${ats.have.includes(k)?'✓':'○'}</span>`).join('')||'<span class="co">—</span>'}</div>
+        ${ats.missing.length?`<div class="banner w" style="margin-top:10px"><b>Missing in resume:</b> ${esc(ats.missing.join(', '))}</div>`:''}
+        <h4>Advice</h4><ul class="list">${ats.advice.map(a=>`<li>💡 ${esc(a)}</li>`).join('')}</ul>
+        <h4>Nice to have</h4><div>${ats.nice_to_have.map(k=>`<span class="chip neutral">${esc(k)}</span>`).join('')||'<span class="co">—</span>'}</div>`;
+      $('#jobBody').innerHTML=html;
+    }).catch(e=>{ $('#jobBody').innerHTML=`<div class="banner w">${esc(e.message)}</div>`;});
+    return;
+  } else if(CURRENT_TAB==='interview'){
+    html='<span class="co">Loading prep…</span>';
+    $('#jobBody').innerHTML=html;
+    fetch(`/api/jobs/${encodeURIComponent(j.job_id)}/interview`).then(r=>r.json()).then(d=>{
+      if(d.error) throw new Error(d.error);
+      html=`<h4>Interview Questions (${d.questions.length})</h4><ul class="list">${d.questions.map((q,i)=>`<li><b>${i+1}. ${esc(q.q)}</b><br><span class="co">Why: ${esc(q.why)}</span><br><span class="co">STAR: ${esc(q.star)}</span></li>`).join('')}</ul>
+        <h4>Prep Checklist</h4><ul class="list">${d.checklist.map(c=>`<li>▸ ${esc(c)}</li>`).join('')}</ul>
+        <div class="banner g"><b>Tip:</b> ${esc(d.tip)}</div>`;
+      $('#jobBody').innerHTML=html;
+    }).catch(e=>{ $('#jobBody').innerHTML=`<div class="banner w">${esc(e.message)}</div>`;});
+    return;
+  } else if(CURRENT_TAB==='salary'){
+    html='<span class="co">Loading salary…</span>';
+    $('#jobBody').innerHTML=html;
+    fetch(`/api/jobs/${encodeURIComponent(j.job_id)}/salary`).then(r=>r.json()).then(d=>{
+      if(!d.has_salary){ html=`<div class="co">No salary disclosed — anchor per Role Fit Map: Tier 1 $60-120k contractor (T&T), AI-native $145-215k (US). Your target $80-120k contractor.</div>`; }
+      else {
+        html=`<div class="kpi"><div class="box"><b>${d.currency} ${d.lo.toLocaleString()} – ${d.hi.toLocaleString()}</b><span>Listed</span></div><div class="box"><b>$${d.lo_usd.toLocaleString()} – $${d.hi_usd.toLocaleString()}</b><span>USD</span></div><div class="box"><b>TT$${d.ttd_lo.toLocaleString()} – TT$${d.ttd_hi.toLocaleString()}</b><span>TTD</span></div><div class="box"><b>${esc(d.band)}</b><span>Band</span></div></div>
+          <div class="banner ${d.position.includes('above')?'g':d.position.includes('below')?'w':''}"><b>${esc(d.position)}</b> — band ${d.band_lo.toLocaleString()}–${d.band_hi.toLocaleString()} USD</div>
+          <div class="co">TTD @ ${6.8}/USD peg. Local T&T senior eng band $45-75k USD (TT$300-500k).</div>`;
+      }
+      $('#jobBody').innerHTML=html;
+    }).catch(e=>{ $('#jobBody').innerHTML=`<div class="banner w">${esc(e.message)}</div>`;});
+    return;
+  } else if(CURRENT_TAB==='ai'){
+    html='<span class="co">Scoring AI match…</span>';
+    $('#jobBody').innerHTML=html;
+    fetch(`/api/jobs/${encodeURIComponent(j.job_id)}/ai-match`).then(r=>r.json()).then(d=>{
+      html=`<div class="kpi"><div class="box"><b>${d.score}%</b><span>AI Match</span></div><div class="box"><b>${d.method}</b><span>Method</span></div><div class="box"><b>${d.cosine}</b><span>Cosine</span></div></div>
+        <div class="banner ${d.score>=70?'g':d.score>=50?'':'w'}"><b>${esc(d.explanation)}</b></div>
+        ${d.top_terms?`<div class="co">Top JD terms: ${d.top_terms.map(t=>`<span class="chip neutral">${esc(t)}</span>`).join('')}</div>`:''}
+        <div class="co" style="margin-top:10px">Hybrid: keywords (${d.score>=60?'good':'needs tailoring'}) + AI semantic. For T&T, AI boosts insurance domain even when keywords miss.</div>`;
+      $('#jobBody').innerHTML=html;
+    }).catch(e=>{ $('#jobBody').innerHTML=`<div class="banner w">${esc(e.message)}</div>`;});
+    return;
+  } else if(CURRENT_TAB==='tailor'){
+    html='<span class="co">Tailoring resume…</span>';
+    $('#jobBody').innerHTML=html;
+    fetch(`/api/jobs/${encodeURIComponent(j.job_id)}/tailor`).then(r=>r.json()).then(d=>{
+      html=`<div class="banner g"><b>Lead with:</b> ${esc(d.lead_with)}</div>
+        <div class="co" style="margin:8px 0"><b>Cover open:</b> “${esc(d.cover_open)}”</div>
+        <h4>Missing keywords (JD has, resume not)</h4><div>${d.missing_keywords.length? d.missing_keywords.map(k=>`<span class="chip gap">${esc(k)} ○</span>`).join('') : '<span class="co">None — well aligned</span>'}</div>
+        <h4>Suggestions</h4><ul class="list">${d.injections.map(s=>`<li>💡 ${esc(s)}</li>`).join('')||'<li class="co">—</li>'}</ul>
+        <h4>Bullets to use</h4><ul class="list">${d.bullets.map(b=>`<li>▸ ${esc(b)}</li>`).join('')}</ul>`;
+      $('#jobBody').innerHTML=html;
+    }).catch(e=>{ $('#jobBody').innerHTML=`<div class="banner w">${esc(e.message)}</div>`;});
+    return;
+  } else if(CURRENT_TAB==='raw'){
+    html=`<pre style="white-space:pre-wrap;font-size:13px;line-height:1.6">${esc(j.description||'—').slice(0,12000)}</pre><div class="co" style="margin-top:10px">Source: ${esc(j.source)} · <a href="${esc(j.url)}" target="_blank">Open original</a></div>`;
+  }
+  $('#jobBody').innerHTML=html;
+}
+$('#jobCopy').onclick=async()=>{if(!CURRENT_JOB) return; await navigator.clipboard.writeText(CURRENT_JOB.url||''); $('#jobCopy').textContent='Copied'; setTimeout(()=>$('#jobCopy').textContent='Copy Link',1200);};
+$('#jobCoverBtn').onclick=()=>{if(!CURRENT_JOB) return; jobDlg.close(); const btn=document.querySelector(`[data-cover="${CSS.escape(CURRENT_JOB.job_id)}"]`); if(btn) draftLetter(CURRENT_JOB.job_id, btn); else draftLetter(CURRENT_JOB.job_id, {textContent:'',disabled:false});};
+async function draftLetter(jobId, btn){const old=btn.textContent; btn.textContent='…'; btn.disabled=true; try{const r=await fetch('/api/cover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job_id:jobId})}); const d=await r.json(); if(!d.ok){alert(d.error);return;} $('#dlgTitle').textContent=`${d.job.title} — ${d.job.company}`; $('#letter').textContent=d.text; $('#dlgNote').textContent=`${d.backend} · saved to ${d.path}`; $('#dlgApply').href=d.job.url||'#'; dlg.showModal(); refresh();} finally{btn.textContent=old; btn.disabled=false;}}
+$('#bCopy').onclick=async()=>{await navigator.clipboard.writeText($('#letter').textContent); $('#bCopy').textContent='Copied'; setTimeout(()=>$('#bCopy').textContent='Copy',1200);};
+let KANBAN=false;
+$('#viewToggle').onclick=()=>{
+  KANBAN=!KANBAN;
+  $('#viewToggle').textContent = KANBAN ? '◧ Table' : '◧ Kanban';
+  $('#tableWrap').style.display = KANBAN ? 'none' : '';
+  $('#kanbanWrap').style.display = KANBAN ? '' : 'none';
+  if(KANBAN) renderKanban();
+};
+async function renderKanban(){
+  const rows=filtered();
+  const cols=["New","Shortlisted","Applied","Interviewing","Offer","Rejected","Passed on it"];
+  const byStatus={}; cols.forEach(c=>byStatus[c]=[]);
+  rows.forEach(j=>{ const s=j.app_status||"New"; (byStatus[s]||byStatus["New"]).push(j);});
+  $('#kanbanBoard').innerHTML = cols.map(col=>{
+    const items=byStatus[col]||[];
+    return `<div style="flex:0 0 220px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:8px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;justify-content:space-between"><span>${esc(col)}</span><span class="pill">${items.length}</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;min-height:100px">
+        ${items.slice(0,12).map(j=>`<div class="card" style="padding:8px;cursor:pointer" data-details="${esc(j.job_id)}">
+          <div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(j.title)}</div>
+          <div class="co" style="font-size:11px">${esc(j.company)} · ${j.fit_score}</div>
+          <div style="margin-top:6px"><span class="flag ${j.fit_score>=65?'g':''}">${j.fit_score}</span></div>
+        </div>`).join('')||'<div class="co" style="padding:20px;text-align:center">—</div>'}
+        ${items.length>12?`<div class="co" style="text-align:center;font-size:11px">+${items.length-12} more</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('#kanbanBoard [data-details]').forEach(el=>el.onclick=()=>openJob(el.dataset.details));
+}
+function showView(v){
+  $('#jobsCard').style.display=v==='jobs'?'':'none';
+  $('#analyticsCard').style.display=v==='analytics'?'':'none';
+  $('#resumeCard').style.display=v==='resume'?'':'none';
+  $('#trinidadCard').style.display=v==='trinidad'?'':'none';
+  document.querySelectorAll('.nav a[data-view]').forEach(a=>a.classList.toggle('active',a.dataset.view===v));
+  document.getElementById('pageTitle').textContent=v==='analytics'?'Analytics':v==='resume'?'Resume':v==='trinidad'?'Trinidad & Tobago': 'Jobs';
+  if(v==='analytics') loadAnalytics();
+  if(v==='resume') loadResume();
+  if(v==='trinidad'){ $('#localOnly').checked=true; showView('jobs'); render(); }
+}
+document.querySelectorAll('.nav a[data-view]').forEach(a=>a.onclick=(e)=>{e.preventDefault(); showView(a.dataset.view);});
+async function loadAnalytics(){
+  $('#analyticsBody').innerHTML='<span class="co">Loading…</span>';
+  try{
+    const r=await fetch('/api/analytics'); const d=await r.json(); if(d.error) throw new Error(d.error);
+    $('#analyticsBody').innerHTML=`<div class="kpi"><div class="box"><b>${d.overview.total}</b><span>Total</span></div><div class="box"><b>${d.overview.tier1}</b><span>Tier 1</span></div><div class="box"><b>${d.overview.high_likelihood}</b><span>High likelihood</span></div><div class="box"><b>${d.overview.avg_fit}</b><span>Avg fit</span></div><div class="box"><b>${d.overview.avg_likelihood}%</b><span>Avg likelihood</span></div><div class="box"><b>${d.overview.salary_rate}%</b><span>Salary disclosed</span></div></div>`;
+    if(window.Chart){
+      const mk=(id,type,labels,data,color)=>{const ctx=document.getElementById(id); if(!ctx) return; const ex=Chart.getChart(id); if(ex) ex.destroy(); new Chart(ctx,{type, data:{labels, datasets:[{data, backgroundColor:color, borderWidth:1}]}, options:{responsive:true, plugins:{legend:{display:false}}, scales: type==='bar'?{y:{beginAtZero:true}}:{}}});};
+      mk('chartFit','bar',d.score_dist.labels,d.score_dist.data,'rgba(79,70,229,0.7)');
+      mk('chartLike','doughnut',d.likelihood_dist.labels,d.likelihood_dist.data,['#dc2626','#d97706','#4f46e5','#059669']);
+      mk('chartSrc','bar',d.source.labels,d.source.avg,'rgba(5,150,105,0.7)');
+      mk('chartGaps','bar',d.gaps.labels.slice(0,5),d.gaps.data.slice(0,5),'rgba(217,119,6,0.7)');
+    } else {
+      const bar=(labels,data)=>labels.map((l,i)=>`<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="width:90px;font-size:12px">${esc(l)}</span><div class="bar" style="flex:1;margin:0"><i style="width:${Math.max(5, data[i]/Math.max(...data)*100)}%"></i></div><span style="font-size:12px">${data[i]}</span></div>`).join('');
+      document.getElementById('chartFit').outerHTML=`<div>${bar(d.score_dist.labels,d.score_dist.data)}</div>`;
+    }
+    $('#insights').innerHTML=`<h4>Insights</h4><ul class="list">${d.insights.map(t=>`<li>💡 ${esc(t)}</li>`).join('')}</ul><div class="co" style="margin-top:10px"><b>Geo:</b> Remote ${d.geo.remote} · Hybrid ${d.geo.hybrid} · On-site ${d.geo.onsite} · Blocker ${d.geo.blocker} · <b>Salary avg:</b> $${d.salary.avg||'—'} (${d.salary.count} disclosed)</div>`;
+  }catch(e){$('#analyticsBody').innerHTML=`<div class="banner w">${esc(e.message)}</div>`;}
+}
+async function loadResume(){
+  $('#resumeBody').innerHTML='<span class="co">Loading…</span>';
+  try{
+    const r=await fetch('/api/resume'); const d=await r.json();
+    $('#resumeBody').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div><h4>${esc(d.name)} — ${d.years} yrs</h4><div class="co">${esc(d.location.location)} · ${esc(d.location.timezone)}</div><h4 style="margin-top:10px">Strengths</h4><ul class="list">${d.strengths.map(s=>`<li>✓ ${esc(s)}</li>`).join('')}</ul><h4>Gaps</h4><ul class="list">${d.gaps.map(s=>`<li>○ ${esc(s)}</li>`).join('')}</ul></div><div><h4>Skills</h4>${Object.entries(d.skills).map(([cat,arr])=>`<div style="margin-bottom:8px"><b>${esc(cat)}</b><br>${arr.map(s=>`<span class="chip neutral">${esc(s)}</span>`).join('')}</div>`).join('')}<h4>Targets</h4><div><b>Tier 1:</b> ${(d.targets.tier_1||[]).slice(0,6).map(t=>`<span class="chip have">${esc(t)}</span>`).join('')}</div><div><b>Tier 2:</b> ${(d.targets.tier_2||[]).slice(0,5).map(t=>`<span class="chip gap">${esc(t)}</span>`).join('')}</div></div></div>`;
+  }catch(e){$('#resumeBody').innerHTML=`<div class="banner w">${esc(e.message)}</div>`;}
+}
+async function loadCoach(force=false){
+  const el=$('#coach'); if(!el) return;
+  el.style.display='';
+  $('#coachText').textContent='Thinking…';
+  try{
+    const r=await fetch('/api/coach/brief'); const d=await r.json();
+    if(d.error) throw new Error(d.error);
+    $('#coachText').textContent=d.text;
+    $('#coachMeta').textContent=`· ${d.source} · ${new Date(d.generated).toLocaleTimeString()}`;
+  }catch(e){ $('#coachText').textContent='Coach offline — use rules: apply to top 3 High, close eval gap this week.'; }
+}
+loadCoach();
+refresh(); setInterval(()=>{if(!POLL) refresh();},20000);
+</script>
+</body>
+</html>

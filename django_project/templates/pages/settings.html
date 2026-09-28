@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block page %}
+      <section class="sheet" id="settingsCard">
+        <h1 class="sheet-title">Settings <span class="quiet" id="settingsMeta"></span></h1>
+        <div id="settingsMsg"></div>
+        <div class="stack">
+          <div class="block">
+            <h3>Display</h3>
+            <label><input type="checkbox" id="setShowRemote" checked> Show remote roles</label><br>
+            <label><input type="checkbox" id="setRemoteOnly"> Remote only</label><br>
+            <label><input type="checkbox" id="setShowLinks" checked> Show apply links</label><br>
+            <label><input type="checkbox" id="setShowSalary" checked> Show salary</label><br>
+            <label><input type="checkbox" id="setHideBlockers"> Hide blockers</label>
+            <div class="quiet" id="linksPreview" style="margin-top:8px"></div>
+          </div>
+          <div class="block">
+            <h3>Next scan</h3>
+            <label>Minimum score <input type="number" id="setMinScore" min="0" max="100" value="35" style="width:72px"></label><br>
+            <label>Maximum age, days <input type="number" id="setMaxAge" min="1" max="365" value="30" style="width:72px"></label><br>
+            <label><input type="checkbox" id="setKeepLocal" checked> Keep every Trinidad posting (ignore minimum score)</label><br>
+            <label>Trinidad postings per board <input type="number" id="setTTLimit" min="5" max="200" value="40" style="width:72px"></label><br>
+            <label>Letter provider
+              <select id="setProvider">
+                <option value="auto">auto</option>
+                <option value="claude_code">claude_code</option>
+                <option value="ollama">ollama</option>
+                <option value="anthropic">anthropic</option>
+                <option value="template">template</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="block" style="margin-top:18px">
+          <h3>Sources</h3>
+          <div id="sourcesGrid" style="display:flex;flex-wrap:wrap;gap:8px 14px"></div>
+        </div>
+        <div class="stack" style="margin-top:18px">
+          <div class="block">
+            <h3>Search terms</h3>
+            <input type="text" id="setSearchTerms" style="width:100%" placeholder="python, django, llm">
+            <h3 style="margin-top:14px">Profile</h3>
+            <label>Website <input type="text" id="setWebsite" style="width:100%"></label>
+            <label>GitHub <input type="text" id="setGithub" style="width:100%"></label>
+            <label>LinkedIn <input type="text" id="setLinkedin" style="width:100%"></label>
+          </div>
+          <div class="block">
+            <h3>Tier 1 targets</h3>
+            <textarea id="setTier1" rows="5"></textarea>
+            <h3 style="margin-top:14px">Tier 2 targets</h3>
+            <textarea id="setTier2" rows="4"></textarea>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" class="go" id="settingsSave">Save settings</button>
+          <button type="button" id="settingsReload">Reload</button>
+          <span class="quiet" id="settingsStatus"></span>
+        </div>
+      </section>
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/settings.js' %}?v=2"></script>
+{% endblock %}

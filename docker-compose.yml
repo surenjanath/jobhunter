@@ -1,0 +1,18 @@
+services:
+  jobhunter:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"          # localhost only: this app has no login
+    environment:
+      DJANGO_ALLOWED_HOSTS: "127.0.0.1,localhost"
+      JOBHUNT_DB: /data/jobhunt.db
+      JOBHUNTER_DJANGO_DB: /data/django.sqlite3
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - jobhunter-data:/data           # jobs database + audit log
+      - ./jobhunt/config:/app/jobhunt/config   # your profile.yaml / fact_bank.md
+    restart: unless-stopped
+volumes:
+  jobhunter-data:

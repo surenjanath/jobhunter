@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block page %}
+      <section class="sheet" id="trinidadCard">
+        <h1 class="sheet-title">Trinidad <span class="quiet">· Local boards ·</span></h1>
+        <p class="quiet">Every local board in one place: regions, employers, categories, and whether each board is actually returning jobs.</p>
+        <div id="trinidadBody"></div>
+      </section>
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/trinidad.js' %}?v=1"></script>
+{% endblock %}

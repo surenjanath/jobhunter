@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block rail %}{% include "partials/_rail.html" %}{% endblock %}
+
+{% block page %}
+      <section class="sheet" id="sheetConditions">
+        <div class="split">
+          <div>
+            <h1 class="sheet-title">Search <span class="quiet">· Current conditions ·</span></h1>
+            <div class="figures" id="stats"></div>
+            <div class="hero">
+              <i class="hero-bar" aria-hidden="true"></i>
+              <div class="hero-num" id="heroPct">—</div>
+              <div class="hero-aside" id="heroSub"></div>
+            </div>
+            <p class="warn-line" id="heroWarn">Reading the latest scan.</p>
+            <button type="button" class="text tiny" id="coachRefresh">Brief</button>
+            <div id="coach" class="coach" hidden>
+              <span id="coachText"></span>
+              <span class="quiet" id="coachMeta"></span>
+            </div>
+            <button type="button" class="text tiny" id="compareExpand">expand +</button>
+            <ul class="compare" id="compareList"></ul>
+            <div class="compare-detail" id="compareDetail" hidden></div>
+          </div>
+          <div>
+            <h2 class="sheet-title">Extended fit report <span class="quiet">· Resume ·</span></h2>
+            <div class="extended">
+              <div class="ext-lead">
+                <div class="quiet">High</div>
+                <div class="mid-num" id="highCount">—</div>
+                <div class="quiet">open roles</div>
+              </div>
+              <div class="radial-wrap">
+                <svg id="radial" viewBox="0 0 280 280" role="img" aria-label="Best odds"></svg>
+              </div>
+              <div class="buoy">
+                <div class="quiet">Due</div>
+                <div class="buoy-num" id="dueCount">—</div>
+                <div class="quiet" id="dueNote"></div>
+              </div>
+              <div class="ext-motion">
+                <div class="quiet">In motion</div>
+                <div class="mid-num" id="motionCount">—</div>
+                <div class="quiet" id="motionNote"></div>
+              </div>
+              <div class="ext-sources">
+                <div class="quiet">Sources</div>
+                <ul class="swells" id="sourceList"></ul>
+              </div>
+            </div>
+            <p class="next" id="nextAction"></p>
+          </div>
+        </div>
+        <div id="todayBlock" class="today"></div>
+      </section>
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/home.js' %}?v=1"></script>
+{% endblock %}

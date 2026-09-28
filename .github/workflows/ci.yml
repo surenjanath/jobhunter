@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -r requirements.txt ruff
+      - name: Lint (syntax errors, undefined names)
+        run: ruff check .
+      - name: Scanner, matching and sources (offline)
+        run: python jobhunt/tests/test_pipeline.py
+      - name: Web app
+        run: cd django_project && python manage.py test

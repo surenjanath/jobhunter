@@ -1,0 +1,55 @@
+<dialog id="dlg">
+  <div class="dh"><h3 id="dlgTitle">Cover letter</h3><button type="button" onclick="dlg.close()">Close</button></div>
+  <div id="letter" style="padding:16px 18px;white-space:pre-wrap;line-height:1.55;max-height:56vh;overflow:auto"></div>
+  <div class="df"><span class="note" id="dlgNote"></span><button type="button" id="bCopy">Copy</button><a id="dlgApply" target="_blank"><button type="button" class="go">Open posting</button></a></div>
+</dialog>
+
+<dialog id="palDlg" class="pal">
+  <input id="palInput" placeholder="Jump to a view, run an action, or find a job…" aria-label="Command palette" autocomplete="off">
+  <ul id="palList"></ul>
+</dialog>
+
+<dialog id="helpDlg">
+  <div class="dh"><h3>Keyboard shortcuts</h3><button type="button" onclick="helpDlg.close()">Close</button></div>
+  <div style="padding:8px 18px 18px">
+    <table class="mini"><tbody>
+      <tr><td><kbd>⌘/Ctrl</kbd> <kbd>K</kbd></td><td>Command palette: views, actions, find any job</td></tr>
+      <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Cycle Conditions / Ledger / Pipeline</td></tr>
+      <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>Move down / up in the Ledger</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>Open the highlighted role</td></tr>
+      <tr><td><kbd>s</kbd></td><td>Star the highlighted role</td></tr>
+      <tr><td><kbd>/</kbd></td><td>Focus search</td></tr>
+      <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>All / Local / Remote</td></tr>
+      <tr><td><kbd>?</kbd></td><td>This help</td></tr>
+    </tbody></table>
+    <p class="co">Tick the boxes in the Ledger to compare up to 4 roles side by side or move many at once.</p>
+  </div>
+</dialog>
+
+<dialog id="jobDlg" class="wide">
+  <div class="dh"><div><h3 id="jobTitle">Job</h3><div class="quiet" id="jobSub"></div></div><button type="button" onclick="jobDlg.close()">Close</button></div>
+  <div class="tabs" id="jobTabs">
+    <button type="button" class="tab active" data-tab="match">Match</button>
+    <button type="button" class="tab" data-tab="overview">Overview</button>
+    <button type="button" class="tab" data-tab="tech">Tech</button>
+    <button type="button" class="tab" data-tab="needs">Needs</button>
+        <button type="button" class="tab" data-tab="ats">ATS</button>
+    <button type="button" class="tab" data-tab="interview">Interview</button>
+    <button type="button" class="tab" data-tab="salary">Salary</button>
+    <button type="button" class="tab" data-tab="ai">AI match</button>
+    <button type="button" class="tab" data-tab="tailor">Tailor</button>
+    <button type="button" class="tab" data-tab="raw">Posting</button>
+  </div>
+  <div id="jobBody" class="tab-body">Loading</div>
+  <div class="df">
+    <span class="note" id="jobNote"></span>
+    <button type="button" id="jobCopy">Copy link</button>
+    <button type="button" id="jobCoverBtn">Draft letter</button>
+    <a id="jobApply" target="_blank"><button type="button" class="go">Open posting</button></a>
+  </div>
+</dialog>
+
+<dialog id="coDlg">
+  <div class="dh"><div><h3 id="coTitle">Employer</h3><div class="quiet" id="coSub"></div></div><button type="button" onclick="coDlg.close()">Close</button></div>
+  <div id="coBody" style="padding:8px 18px 16px;max-height:60vh;overflow:auto"></div>
+</dialog>

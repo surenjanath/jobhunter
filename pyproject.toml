@@ -1,0 +1,17 @@
+[project]
+name = "jobhunter"
+version = "3.0.0"
+description = "Local-first job search intelligence: multi-source scanner, resume-aware fit and odds, analytics, and AI helpers. Built for Trinidad & Tobago and remote roles."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+extend-exclude = ["django_project/*/migrations"]
+
+[tool.ruff.lint]
+# CI gate: syntax errors, undefined names, unused imports/variables that hide bugs. Style is left to the author.
+select = ["E9", "F63", "F7", "F82", "F401", "F811", "F841"]
+ignore = ["F401"]   # re-exports and lazy optional imports are intentional here

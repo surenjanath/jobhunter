@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block page %}
+      <section class="sheet" id="jobsCard">
+        <h1 class="sheet-title">Ledger <span class="quiet">· Ranked roles ·</span></h1>
+        <div class="modebar">
+          <div class="seg" id="modeSeg" role="group" aria-label="Work mode">
+            <button type="button" data-mode="all" class="on">All</button>
+            <button type="button" data-mode="local">🇹🇹 Local</button>
+            <button type="button" data-mode="remote">Remote</button>
+            <button type="button" data-mode="onsite">On-site abroad</button>
+          </div>
+          <span class="quiet" id="rowCount"></span>
+          <span class="spacer"></span>
+          <select id="likeSel" aria-label="Minimum odds"><option value="">Any odds</option><option value="20">Low or better</option><option value="40">Medium or better</option><option value="65">High only</option></select>
+          <select id="viewSel" aria-label="Saved views"><option value="">Saved views</option></select>
+          <input id="viewName" placeholder="View name, Enter" hidden style="width:130px">
+          <button type="button" class="text" id="viewSave" title="Save the current filters as a view">Save view</button>
+          <button type="button" class="text" id="viewDel" title="Delete the selected view">✕</button>
+          <button type="button" class="text" id="clearBtn">Clear</button>
+          <button type="button" class="text" id="densityBtn">Compact</button>
+        </div>
+        <div class="filters">
+          <input type="search" id="q" placeholder="Search title, company, location">
+          <select id="tier"><option value="">All tiers</option><option value="65">Tier 1, 65+</option><option value="50">Tier 2, 50+</option></select>
+          <select id="src"><option value="">All sources</option></select>
+          <select id="statusFilter"><option value="">All statuses</option><option>New</option><option>Shortlisted</option><option>Applied</option><option>Interviewing</option><option>Offer</option><option>Rejected</option><option>Passed on it</option></select>
+          <select id="regionSel"><option value="">All regions</option></select>
+          <select id="catSel"><option value="">All categories</option></select>
+          <select id="sortSel"><option value="fit">Sort by fit</option><option value="likelihood">Sort by odds</option><option value="chance">Sort by interview chance</option><option value="recent">Sort by posted</option><option value="new">Sort by newly found</option><option value="closing">Sort by closing soon</option></select>
+          <button type="button" id="viewToggle">Board</button>
+          <label><input type="checkbox" id="closingSoon"> Closing ≤ 7d</label>
+          <label><input type="checkbox" id="starOnly"> Starred</label>
+          <label><input type="checkbox" id="clean"> Hide blockers</label>
+        </div>
+        <div class="sheet-scroll" id="tableWrap"></div>
+        <div id="kanbanWrap" class="sheet-scroll" hidden>
+          <div class="kanban" id="kanbanBoard"></div>
+        </div>
+      </section>
+{% endblock %}
+
+{% block page_tools %}{% include "partials/_bulkbar.html" %}{% endblock %}
+{% block page_dialogs %}{% include "partials/_dialog_compare.html" %}{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/ledger.js' %}?v=1"></script>
+<script src="{% static 'js/ledger_tools.js' %}?v=1"></script>
+{% endblock %}

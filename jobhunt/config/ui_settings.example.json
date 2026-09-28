@@ -1,0 +1,9 @@
+{
+  "show_remote": true,
+  "remote_only": false,
+  "show_links": true,
+  "show_salary": true,
+  "hide_blockers": false,
+  "local_only_default": false,
+  "min_score_default": 0
+}
