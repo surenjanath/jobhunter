@@ -208,4 +208,5 @@ def serialize(job: Job) -> dict:
         "followup_date": (st.followup_date if st else "") or "",
         "notes": (st.notes if st else "") or "",
         "applied_date": (st.applied_date if st else "") or "",
+        "dismiss_reason": (st.dismiss_reason if st else "") or "",
     }

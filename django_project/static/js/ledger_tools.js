@@ -16,11 +16,20 @@ function wireSelection(){
   const all=$('#selAll'); if(all){ all.onclick=e=>e.stopPropagation(); all.onchange=()=>{ document.querySelectorAll('#tableWrap [data-sel]').forEach(cb=>{ cb.checked=all.checked; all.checked?SEL.add(cb.dataset.sel):SEL.delete(cb.dataset.sel); }); updateBulk(); }; }
   updateBulk();
 }
-async function bulkStatus(status){
+async function bulkStatus(status,dismissReason){
   if(!status||!SEL.size) return;
-  try{ const r=await jfetch('/api/jobs/bulk-status/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job_ids:[...SEL],status})});
-    JOBS.forEach(j=>{ if(SEL.has(j.job_id)) j.app_status=status; }); toast(`${r.updated} job${r.updated!==1?'s':''} moved to ${status}`); SEL.clear(); render(); }
+  const body={job_ids:[...SEL],status}; if(dismissReason) body.dismiss_reason=dismissReason;
+  try{ const r=await jfetch('/api/jobs/bulk-status/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    JOBS.forEach(j=>{ if(SEL.has(j.job_id)){ j.app_status=status; if(dismissReason) j.dismiss_reason=dismissReason; } }); toast(`${r.updated} job${r.updated!==1?'s':''} moved to ${status}`); SEL.clear(); render(); }
   catch(e){ toast(e.message,'bad'); }
+}
+// "Passed on it" asks why first — the same fixed reasons the job dialog uses, so Analytics can count them.
+function openDismissDialog(){
+  const n=SEL.size; $('#dismissCount').textContent=`${n} role${n!==1?'s':''}`;
+  const sel=$('#dismissReason'); sel.innerHTML=DISMISS_REASONS.map(o=>`<option>${o}</option>`).join(''); sel.value='Pay too low';
+  const other=$('#dismissOther'); other.hidden=true; other.value='';
+  sel.onchange=()=>{ other.hidden=sel.value!=='Other'; };
+  $('#dismissDlg').showModal();
 }
 async function bulkStar(){
   for(const id of [...SEL]){ const j=JOBS.find(x=>x.job_id===id); if(j&&!j.starred) await toggleStar(id); }
@@ -101,7 +110,8 @@ function wireViews(){
 Object.assign(PAGE_HOOKS,{});   // (wiring below runs on DOMContentLoaded; the Ledger page hooks live in ledger.js)
 document.addEventListener('DOMContentLoaded',()=>{
   const bc=$('#bulkCompare'); if(bc) bc.onclick=openCompare;
-  const bs=$('#bulkStatus'); if(bs) bs.onchange=()=>{ bulkStatus(bs.value); bs.value=''; };
+  const bs=$('#bulkStatus'); if(bs) bs.onchange=()=>{ if(bs.value==='Passed on it') openDismissDialog(); else bulkStatus(bs.value); bs.value=''; };
+  const dc=$('#dismissConfirm'); if(dc) dc.onclick=()=>{ const sel=$('#dismissReason'), other=$('#dismissOther'); const reason=sel.value==='Other'?(other.value.trim()||'Other'):sel.value; $('#dismissDlg').close(); bulkStatus('Passed on it',reason); };
   const bst=$('#bulkStar'); if(bst) bst.onclick=bulkStar;
   const bx=$('#bulkClear'); if(bx) bx.onclick=()=>{ SEL.clear(); render(); };
   wireViews();

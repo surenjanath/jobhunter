@@ -34,11 +34,16 @@ function openPalette(){ const d=$('#palDlg'); if(d.open) return; $('#palInput').
 // ---- tracking strip in the job dialog -----------------------------------------------------------------------------
 function trackHtml(j){
   const st=["New","Shortlisted","Applied","Interviewing","Offer","Rejected","Passed on it"];
+  const reason=j.dismiss_reason||'', known=DISMISS_REASONS.includes(reason), passed=(j.app_status||'New')==='Passed on it';
   return `<div class="track"><h4>Track this application</h4>
     <div class="trackrow">
       <select id="trStatus">${st.map(o=>`<option ${o===(j.app_status||'New')?'selected':''}>${o}</option>`).join('')}</select>
       <label class="co">Follow up <input type="date" id="trFollow" value="${esc(j.followup_date||'')}"></label>
       <span class="co">in <button type="button" class="text" data-fu="3">3d</button> <button type="button" class="text" data-fu="7">1w</button> <button type="button" class="text" data-fu="14">2w</button></span>
+    </div>
+    <div class="trackrow" id="trReasonRow" ${passed?'':'hidden'}>
+      <label class="co">Why passing? <select id="trReason">${DISMISS_REASONS.map(o=>`<option ${o===reason||(!known&&o==='Other')?'selected':''}>${o}</option>`).join('')}</select></label>
+      <input id="trReasonOther" placeholder="Say more…" value="${esc(!known&&reason?reason:'')}" ${(known||!reason)&&reason!=='Other'?'hidden':''}>
     </div>
     <textarea id="trNotes" rows="2" placeholder="Notes: contact, referral, what to mention…">${esc(j.notes||'')}</textarea>
     <div class="actions" style="margin-top:6px"><button type="button" class="go sm" id="trSave">Save</button><span class="co" id="trMsg"></span></div></div>`;
@@ -46,11 +51,15 @@ function trackHtml(j){
 function wireTrack(j){
   const save=$('#trSave'); if(!save) return;
   document.querySelectorAll('[data-fu]').forEach(b=>b.onclick=()=>{ const d=new Date(); d.setDate(d.getDate()+ +b.dataset.fu); $('#trFollow').value=d.toISOString().slice(0,10); });
+  const statusEl=$('#trStatus'), reasonRow=$('#trReasonRow'), reasonSel=$('#trReason'), reasonOther=$('#trReasonOther');
+  const syncReason=()=>{ reasonRow.hidden=statusEl.value!=='Passed on it'; reasonOther.hidden=reasonSel.value!=='Other'; };
+  statusEl.onchange=syncReason; reasonSel.onchange=syncReason;
   save.onclick=async()=>{
-    const body={status:$('#trStatus').value,followup_date:$('#trFollow').value,notes:$('#trNotes').value};
+    const body={status:statusEl.value,followup_date:$('#trFollow').value,notes:$('#trNotes').value};
     if(body.status==='Applied' && !j.applied_date) body.applied_date=new Date().toISOString().slice(0,10);
+    if(body.status==='Passed on it') body.dismiss_reason=reasonSel.value==='Other'?(reasonOther.value.trim()||'Other'):reasonSel.value;
     try{ await jfetch(`/api/jobs/${encodeURIComponent(j.job_id)}/status/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const row=JOBS.find(x=>x.job_id===j.job_id); if(row) Object.assign(row,{app_status:body.status,followup_date:body.followup_date,notes:body.notes}); Object.assign(j,{app_status:body.status,followup_date:body.followup_date,notes:body.notes});
+      const row=JOBS.find(x=>x.job_id===j.job_id); if(row) Object.assign(row,{app_status:body.status,followup_date:body.followup_date,notes:body.notes,dismiss_reason:body.dismiss_reason??row.dismiss_reason}); Object.assign(j,{app_status:body.status,followup_date:body.followup_date,notes:body.notes,dismiss_reason:body.dismiss_reason??j.dismiss_reason});
       toast('Saved'); if(typeof render==='function') render(); loadAlerts(); }
     catch(e){ toast(e.message,'bad'); }
   };

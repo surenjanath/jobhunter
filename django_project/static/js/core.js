@@ -4,6 +4,8 @@
 
 const $=s=>document.querySelector(s);
 let JOBS=[], POLL=null, CURSOR=0;
+// Why you passed on a role: a fixed set so Analytics can count them, plus a free-text "Other".
+const DISMISS_REASONS=["Pay too low","Wrong seniority","Needs relocation","Missing a must-have skill","Not a fit for me","Applied elsewhere / no longer needed","Other"];
 let SETTINGS={preferences:{show_remote:true,remote_only:false,show_links:true,show_salary:true,hide_blockers:false,local_only_default:false},sources:{},filters:{},links:{}};
 const PAGE=document.body.dataset.page||'home';
 

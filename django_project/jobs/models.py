@@ -47,6 +47,7 @@ class ApplicationStatus(models.Model):
     notes = models.TextField(blank=True, default="")
     updated_at = models.TextField()
     starred = models.BooleanField(default=False)
+    dismiss_reason = models.TextField(blank=True, default="")
 
     class Meta:
         managed = False

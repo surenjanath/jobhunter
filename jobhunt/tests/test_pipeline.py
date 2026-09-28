@@ -655,6 +655,8 @@ def main() -> int:
         test_sources.run(check, cfg)
         from tests import test_ai
         test_ai.run(check, cfg)
+        from tests import test_dismiss
+        test_dismiss.run(check, cfg)
     finally:
         for p in out.glob("cover_*.md"):
             if p not in letters_before:

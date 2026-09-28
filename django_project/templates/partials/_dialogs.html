@@ -68,3 +68,13 @@
   <div class="dh"><h3 id="roadTitle">Roadmap</h3><button type="button" onclick="roadDlg.close()">Close</button></div>
   <div id="roadBody" style="padding:8px 18px 16px;max-height:60vh;overflow:auto"></div>
 </dialog>
+
+<dialog id="dismissDlg">
+  <div class="dh"><h3>Pass on <span id="dismissCount"></span></h3><button type="button" onclick="dismissDlg.close()">Close</button></div>
+  <div style="padding:8px 18px 16px">
+    <p class="co">Why? This feeds Analytics so patterns in what you pass on show up over time.</p>
+    <select id="dismissReason" style="width:100%"></select>
+    <input id="dismissOther" placeholder="Say more…" style="width:100%;margin-top:8px" hidden>
+    <div class="actions" style="margin-top:14px"><button type="button" class="go sm" id="dismissConfirm">Pass on it</button></div>
+  </div>
+</dialog>

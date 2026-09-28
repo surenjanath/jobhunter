@@ -37,7 +37,7 @@ def rows_from_db():
             "url": j.url, "match": m,
             "status": (st.status if st else "New") or "New", "starred": bool(st.starred) if st else False,
             "applied_date": (st.applied_date if st else "") or "", "followup_date": (st.followup_date if st else "") or "",
-            "status_updated": (st.updated_at if st else "") or "",
+            "status_updated": (st.updated_at if st else "") or "", "dismiss_reason": (st.dismiss_reason if st else "") or "",
         })
     return out
 
@@ -290,6 +290,15 @@ def funnel(rows, today):
     }
 
 
+def passed_reasons(rows, limit=8):
+    """Why you've dismissed roles ("Passed on it" + a reason). A pattern here is worth acting on:
+    always "pay too low" for remote roles, say, or one skill showing up in "missing a must-have" again and again."""
+    c = Counter(r["dismiss_reason"] for r in rows if r["status"] == "Passed on it" and r["dismiss_reason"])
+    total = sum(r["status"] == "Passed on it" for r in rows)
+    return {"total": total, "with_reason": sum(c.values()),
+            "reasons": [{"reason": k, "count": v} for k, v in c.most_common(limit)]}
+
+
 def top_opportunities(rows, limit=8):
     live = [r for r in rows if r["status"] in ("New", "Shortlisted") and not ((r["match"] or {}).get("blockers"))]
     live.sort(key=lambda r: -(r["fit"] * 0.5 + r["likelihood"] * 0.5))
@@ -343,6 +352,10 @@ def text_insights(rows, data, today):
     thin = sum(1 for r in rows if (r["match"] or {}).get("confidence") == "low")
     if thin > n * 0.3:
         out.append({"kind": "info", "text": f"{thin} listings have thin descriptions, so their scores are less certain."})
+    pr = data["passed_reasons"]
+    if pr["reasons"] and pr["reasons"][0]["count"] >= 3:
+        top = pr["reasons"][0]
+        out.append({"kind": "info", "text": f"You've passed on {pr['total']} roles, most often for \"{top['reason']}\" ({top['count']} times) — worth tightening your filters for that."})
     return out
 
 
@@ -494,7 +507,7 @@ def build(rows, prefs=None, today=None, profile=None):
         "top": top_opportunities(rows),
         "map": opportunity_map(rows), "bundles": skill_bundles(rows), "employers": employers(rows, today),
         "pay_by_category": salary_by_category(rows), "experience": experience_asked(rows, float((profile or {}).get("years_experience") or 0)),
-        "time_open": time_open(rows), "market": market_score(rows, profile),
+        "time_open": time_open(rows), "market": market_score(rows, profile), "passed_reasons": passed_reasons(rows),
     }
     data["insights"] = text_insights(rows, data, today)
     return data

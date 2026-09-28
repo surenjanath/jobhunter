@@ -140,8 +140,13 @@ def bulk_status(request):
     for job in Job.objects.using("jobhunt").filter(pk__in=ids):
         st = ApplicationStatus.objects.using("jobhunt").filter(pk=job.job_id).first()
         prev = (st.status if st else "New") or "New"
-        ApplicationStatus.objects.using("jobhunt").update_or_create(
-            job_id=job.job_id, defaults={"status": status_val, "updated_at": now})
+        defaults = {"status": status_val, "updated_at": now}
+        reason = request.data.get("dismiss_reason")
+        if reason is not None:
+            defaults["dismiss_reason"] = reason
+        elif status_val != "Passed on it":
+            defaults["dismiss_reason"] = ""
+        ApplicationStatus.objects.using("jobhunt").update_or_create(job_id=job.job_id, defaults=defaults)
         try:
             from core.models import StatusEvent
             StatusEvent.objects.create(job_id=job.job_id, title=job.title, company=job.company,
@@ -256,6 +261,7 @@ def job_status(request, job_id):
             notes=data.get("notes"),
             applied_date=data.get("applied_date"),
             followup_date=data.get("followup_date"),
+            dismiss_reason=data.get("dismiss_reason"),
         )
         note = (data.get("notes") or "").strip()
         follow = data.get("followup_date")

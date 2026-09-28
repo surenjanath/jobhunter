@@ -137,7 +137,7 @@ _MIGRATIONS = {
              "region": "TEXT DEFAULT ''", "category": "TEXT DEFAULT ''",
              "likelihood": "INTEGER DEFAULT 0", "interview_chance": "INTEGER DEFAULT 0",
              "work_mode": "TEXT DEFAULT ''", "remote_scope": "TEXT DEFAULT ''", "match_json": "TEXT DEFAULT ''"},
-    "app_status": {"starred": "INTEGER DEFAULT 0"},
+    "app_status": {"starred": "INTEGER DEFAULT 0", "dismiss_reason": "TEXT DEFAULT ''"},
 }
 
 
@@ -285,12 +285,20 @@ def stats() -> dict:
     return {"total": total, "tier1": t1, "tier2": t2, "by_source": by_src2}
 
 
-def update_status(job_id: str, status: str = None, notes: str = None, applied_date: str = None, followup_date: str = None) -> bool:
+def update_status(job_id: str, status: str = None, notes: str = None, applied_date: str = None, followup_date: str = None,
+                  dismiss_reason: str = None) -> bool:
     fields = []
     params: list[Any] = []
     if status is not None:
         fields.append("status=?")
         params.append(status)
+        if dismiss_reason is None and status != "Passed on it":
+            # leaving "Passed on it" (re-opening the role) clears a stale reason from the last time it was dismissed
+            fields.append("dismiss_reason=?")
+            params.append("")
+    if dismiss_reason is not None:
+        fields.append("dismiss_reason=?")
+        params.append(dismiss_reason)
     if notes is not None:
         fields.append("notes=?")
         params.append(notes)

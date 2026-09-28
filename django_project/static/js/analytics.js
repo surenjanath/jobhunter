@@ -58,6 +58,8 @@ function paintInsights(){
       ${panel('cScans','Scan history','jobs kept per scan',220)}
       <section class="panel"><h3>Board health <span class="quiet">latest scan</span></h3>
         <table class="mini"><tbody>${(d.boards||[]).map(b=>`<tr><td>${esc(b.label)}</td><td>${b.ok?(b.count?'●':'○'):'<span class="urgent">✕</span>'} ${b.count} roles</td><td class="co">${(b.ms/1000).toFixed(1)}s${b.error?` · ${esc(b.error.slice(0,60))}`:''}</td></tr>`).join('')||'<tr><td class="co">No scan recorded yet.</td></tr>'}</tbody></table></section>
+      ${d.passed_reasons.total?`<section class="panel"><h3>Why you passed <span class="quiet">${d.passed_reasons.total} role${d.passed_reasons.total!==1?'s':''} dismissed</span></h3>
+        <table class="mini"><tbody>${d.passed_reasons.reasons.map(r=>`<tr><td>${esc(r.reason)}</td><td><span class="bar-cell"><i style="width:${Math.min(100,r.count/Math.max(1,d.passed_reasons.reasons[0].count)*100)}%"></i></span> ${r.count}</td></tr>`).join('')||'<tr><td colspan="2" class="co">No reason recorded yet — pick one from the Ledger\'s "Move to…" or a job\'s Match tab.</td></tr>'}</tbody></table></section>`:''}
     </div>
     ${marketBlock(d)}
     <section class="panel wide" id="an-best"><h3>Best opportunities right now <span class="quiet">fit and odds together, blockers removed, not yet applied</span></h3>

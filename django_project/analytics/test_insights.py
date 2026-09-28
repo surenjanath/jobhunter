@@ -19,7 +19,8 @@ def row(job_id, fit=60, odds=45, region="", mode="remote", status="New", skills=
     base = {"job_id": job_id, "title": f"Role {job_id}", "company": "Acme", "source": "ashby", "region": region, "category": "Technology",
             "location": "x", "remote": mode == "remote", "fit": fit, "likelihood": odds, "chance": round(odds / 5, 1), "work_mode": mode,
             "remote_scope": scope if mode == "remote" else "", "posted_at": iso(-1), "first_seen": first_seen or iso(-1), "expires_at": expires,
-            "url": "u", "match": m, "status": status, "starred": False, "applied_date": "", "followup_date": "", "status_updated": ""}
+            "url": "u", "match": m, "status": status, "starred": False, "applied_date": "", "followup_date": "", "status_updated": "",
+            "dismiss_reason": ""}
     base.update(kw)
     return base
 
@@ -174,6 +175,24 @@ class InsightsV2Tests(SimpleTestCase):
 
     def test_build_includes_v2_sections_and_is_json_safe(self):
         d = ins.build(self.rows(), {}, today=TODAY, profile={"skills": {}, "years_experience": 5})
-        for k in ("map", "bundles", "employers", "pay_by_category", "experience", "time_open", "market"):
+        for k in ("map", "bundles", "employers", "pay_by_category", "experience", "time_open", "market", "passed_reasons"):
             self.assertIn(k, d)
         json.dumps(d)
+
+    def test_passed_reasons_counts_and_ignores_no_reason(self):
+        rows = [
+            row("p1", status="Passed on it", dismiss_reason="Pay too low"),
+            row("p2", status="Passed on it", dismiss_reason="Pay too low"),
+            row("p3", status="Passed on it", dismiss_reason="Wrong seniority"),
+            row("p4", status="Passed on it", dismiss_reason=""),   # dismissed before this feature existed — no reason on file
+            row("p5", status="Rejected", dismiss_reason=""),        # not a dismissal
+        ]
+        pr = ins.passed_reasons(rows)
+        self.assertEqual(pr["total"], 4)
+        self.assertEqual(pr["with_reason"], 3)
+        self.assertEqual(pr["reasons"][0], {"reason": "Pay too low", "count": 2})
+
+    def test_text_insights_flags_a_dominant_dismissal_reason(self):
+        rows = self.rows() + [row(f"p{i}", status="Passed on it", dismiss_reason="Pay too low") for i in range(3)]
+        d = ins.build(rows, {}, today=TODAY, profile={})
+        self.assertTrue(any("Pay too low" in x["text"] for x in d["insights"]))

@@ -90,6 +90,32 @@ class TrackingTests(ScannerDBTestCase):
         self.assertEqual(sorted(j["job_id"] for j in by), ["a", "b"])
         self.assertEqual(self.post("/api/jobs/bulk-status/", {"job_ids": [], "status": "x"}).status_code, 400)
 
+    def test_dismiss_reason_single_and_bulk(self):
+        from jobs.models import ApplicationStatus
+        from src import db as _db   # the single-job status endpoint writes through this, not the ORM — see job_status()
+
+        def reason_via_scanner_db(jid):
+            c = _db._conn()
+            row = c.execute("SELECT status, dismiss_reason FROM app_status WHERE job_id=?", (jid,)).fetchone()
+            c.close()
+            return dict(row) if row else None
+
+        # single job: PUT status with a reason, then re-open it and the reason clears
+        r = self.client.put("/api/jobs/a/status/", data=json.dumps({"status": "Passed on it", "dismiss_reason": "Pay too low"}), content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(reason_via_scanner_db("a"), {"status": "Passed on it", "dismiss_reason": "Pay too low"})
+        self.client.put("/api/jobs/a/status/", data=json.dumps({"status": "Shortlisted"}), content_type="application/json")
+        self.assertEqual(reason_via_scanner_db("a"), {"status": "Shortlisted", "dismiss_reason": ""})
+
+        # bulk (a different code path — Django ORM, not the scanner db): both jobs dismissed with the same reason
+        r = json.loads(self.post("/api/jobs/bulk-status/", {"job_ids": ["a", "b"], "status": "Passed on it", "dismiss_reason": "Wrong seniority"}).content)
+        self.assertEqual(r["updated"], 2)
+        for jid in ("a", "b"):
+            self.assertEqual(ApplicationStatus.objects.using("jobhunt").get(pk=jid).dismiss_reason, "Wrong seniority")
+        # moving a bulk-dismissed job elsewhere in bulk clears its reason too
+        self.post("/api/jobs/bulk-status/", {"job_ids": ["a"], "status": "New"})
+        self.assertEqual(ApplicationStatus.objects.using("jobhunt").get(pk="a").dismiss_reason, "")
+
     def test_followups_and_closing_soon(self):
         from jobs.models import ApplicationStatus
         ApplicationStatus.objects.using("jobhunt").create(job_id="a", status="Applied", followup_date=iso(-2), updated_at="n")
