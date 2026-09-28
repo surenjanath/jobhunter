@@ -31,15 +31,18 @@
   <div class="tabs" id="jobTabs">
     <button type="button" class="tab active" data-tab="match">Match</button>
     <button type="button" class="tab" data-tab="overview">Overview</button>
-    <button type="button" class="tab" data-tab="tech">Tech</button>
-    <button type="button" class="tab" data-tab="needs">Needs</button>
-    <button type="button" class="tab" data-tab="ats">ATS</button>
+    <button type="button" class="tab" data-tab="tech" data-group="req">Requirements</button>
     <button type="button" class="tab" data-tab="interview">Interview</button>
     <button type="button" class="tab" data-tab="salary">Salary</button>
     <button type="button" class="tab" data-tab="summary" data-group="ai">✦ AI</button>
     <button type="button" class="tab" data-tab="raw">Posting</button>
   </div>
-  <div class="subtabs" id="jobSubTabs" hidden>
+  <div class="subtabs" id="jobSubTabsReq" hidden>
+    <button type="button" class="tab" data-tab="tech">Tech</button>
+    <button type="button" class="tab" data-tab="needs">Needs</button>
+    <button type="button" class="tab" data-tab="ats">ATS check</button>
+  </div>
+  <div class="subtabs" id="jobSubTabsAi" hidden>
     <button type="button" class="tab" data-tab="summary">Summary &amp; red flags</button>
     <button type="button" class="tab" data-tab="aimatch">Resume match</button>
     <button type="button" class="tab" data-tab="tailor">Tailor</button>

@@ -1,16 +1,22 @@
 // job.js — the job dialog (Match / Overview / Tech / … tabs) and cover-letter drafting. Used by every page that lists jobs.
 async function toggleStar(jid,el){ try{ const r=await jfetch(`/api/jobs/${encodeURIComponent(jid)}/star/`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); const j=JOBS.find(x=>x.job_id===jid); if(j) j.starred=r.starred; if(el){ el.classList.toggle('on',r.starred); el.textContent=r.starred?'★':'☆'; } }catch(e){ toast(e.message,'bad'); } }
 let CURRENT_JOB=null, CURRENT_TAB='overview';
-const AI_TABS=['summary','aimatch','tailor','rewrite','practice','outreach'];
-// Tabs live in two rows: the main row, and (for ✦ AI) a second row of tools. setTab keeps both in sync and renders.
+// Tabs live in two rows: the main row, and (for a grouped tab) a second row of tools underneath it.
+// Each group's own row is read from its own <div class="subtabs">, so its member tabs never need listing twice.
+const TAB_GROUPS={ req:[...document.querySelectorAll('#jobSubTabsReq .tab')].map(x=>x.dataset.tab),
+                   ai:[...document.querySelectorAll('#jobSubTabsAi .tab')].map(x=>x.dataset.tab) };
+function groupOf(tab){ return Object.keys(TAB_GROUPS).find(g=>TAB_GROUPS[g].includes(tab)); }
 function syncTabs(){
-  const inAi=AI_TABS.includes(CURRENT_TAB);
-  document.querySelectorAll('#jobTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.group==='ai'?inAi:x.dataset.tab===CURRENT_TAB));
-  document.querySelectorAll('#jobSubTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===CURRENT_TAB));
-  $('#jobSubTabs').hidden=!inAi;
+  const active=groupOf(CURRENT_TAB);
+  document.querySelectorAll('#jobTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.group?x.dataset.group===active:x.dataset.tab===CURRENT_TAB));
+  for(const g of Object.keys(TAB_GROUPS)){
+    const row=$(`#jobSubTabs${g[0].toUpperCase()}${g.slice(1)}`); if(!row) continue;
+    row.hidden=active!==g;
+    row.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===CURRENT_TAB));
+  }
 }
 function setTab(t){ CURRENT_TAB=t; syncTabs(); if(CURRENT_JOB) renderJobTab(CURRENT_JOB); }
-document.querySelectorAll('#jobTabs .tab, #jobSubTabs .tab').forEach(el=>el.onclick=()=>setTab(el.dataset.tab));
+document.querySelectorAll('#jobTabs .tab, #jobSubTabsReq .tab, #jobSubTabsAi .tab').forEach(el=>el.onclick=()=>setTab(el.dataset.tab));
 async function openJob(jobId){
   const j=JOBS.find(x=>x.job_id===jobId); if(!j) return;
   $('#jobTitle').textContent=j.title; $('#jobSub').textContent=`${j.company} · ${j.location||'—'} · ${j.source}`; $('#jobApply').href=j.url||'#'; $('#jobNote').textContent=`Fit ${j.fit_score} · ${j.tier} · ${j.posted_at||'—'}`; $('#jobBody').innerHTML='<span class="co">Analyzing…</span>'; jobDlg.showModal(); CURRENT_JOB=j; CURRENT_TAB='match'; syncTabs();
