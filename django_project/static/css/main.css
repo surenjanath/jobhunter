@@ -352,3 +352,21 @@ mark.hl.have{background:rgba(127,127,120,.18)}
 .today h3{font-size:13px;font-weight:500;margin:0 0 6px}
 .bulkbar[hidden],#toasts:empty{display:none}
 .cand{padding:6px 0;border-bottom:1px solid var(--rule);font-size:13px}
+
+/* ---- AI features -------------------------------------------------------------------------------------------------- */
+.aibar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:1px solid var(--rule)}
+.aiopt{font-size:13px;display:flex;gap:6px;align-items:center}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.chipbtn{padding:4px 10px;border:1px solid var(--rule);border-radius:99px;font-size:13px;color:var(--mute)}
+.chipbtn.on{color:var(--ink);border-color:var(--ink)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:640px){.two{grid-template-columns:1fr}}
+.rw{margin:0 0 16px;padding-bottom:14px;border-bottom:1px solid var(--rule)}
+.rw-o{color:var(--mute);margin:6px 0}
+.rw-n{margin:6px 0}
+.rv{margin:0 0 12px}
+.rv.win{color:var(--mute);margin-bottom:4px}
+#recsBox{list-style:none;padding:0;margin:0}
+#recsBox li{padding:6px 0;border-bottom:1px solid var(--rule)}
+.subnav{display:flex;gap:18px;flex-wrap:wrap;margin:0 0 18px;font-size:13px;position:sticky;top:0;background:var(--canvas);padding:8px 0;z-index:2;border-bottom:1px solid var(--rule)}
+.subnav a{color:var(--mute);text-decoration:none}.subnav a:hover{color:var(--ink)}

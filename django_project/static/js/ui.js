@@ -21,7 +21,9 @@ function palRender(q){
   const ql=q.toLowerCase().trim();
   const cmds=palCommands().filter(c=>!ql||c.label.toLowerCase().includes(ql));
   const jobs=ql.length>=2?JOBS.filter(j=>`${j.title} ${j.company}`.toLowerCase().includes(ql)).slice(0,8).map(j=>({label:j.title,sub:`${j.company} · fit ${j.fit_score}`,hint:'job',run:()=>{ openJob(j.job_id); }})):[];
-  PAL_ITEMS=[...cmds.slice(0,9),...jobs]; PAL_I=0;
+  const ask=ql.length>=4?[{label:`Search: “${q.trim()}”`,sub:'plain English, e.g. “remote python roles worth applying”',hint:'ask',run:()=>askAndGo(q.trim())}]:[];
+  const wordy=ql.split(/\s+/).length>=3||ql.startsWith('?');
+  PAL_ITEMS=wordy?[...ask,...cmds.slice(0,8),...jobs]:[...cmds.slice(0,9),...jobs,...ask]; PAL_I=0;
   $('#palList').innerHTML=PAL_ITEMS.map((c,i)=>`<li class="${i===0?'on':''}" data-i="${i}"><span>${esc(c.label)}${c.sub?`<span class="co"> · ${esc(c.sub)}</span>`:''}</span><span class="co">${esc(c.hint)}</span></li>`).join('')||'<li class="co">No matches</li>';
   document.querySelectorAll('#palList li[data-i]').forEach(li=>li.onclick=()=>palRun(+li.dataset.i));
 }

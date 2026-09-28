@@ -45,6 +45,23 @@ answers with JSON, including errors (`{"error": "..."}`), and works with or with
 | `GET /api/insights/` | Everything the Analytics page draws |
 | `GET /api/brief/`, `/api/coach/brief/` | Home-page brief and daily coach text |
 
+## AI features
+
+Every endpoint works without a model. `POST` with `{"ai": true}` (or `?ai=1` on `GET`) adds an LLM pass through your configured provider; nothing is sent otherwise.
+
+| Method & path | What it does |
+|---|---|
+| `GET /api/ai/status/` | Which providers are available and where your text would go |
+| `GET/POST /api/jobs/<id>/summary/` | TL;DR, must-haves, red flags, good signs, questions to ask |
+| `POST /api/jobs/<id>/rewrite/` | Your best bullets re-worded for the posting (rejects rewrites that add facts) |
+| `POST /api/jobs/<id>/outreach/` | `{kind}`: `follow_up`, `thank_you`, `recruiter_intro`, `referral` |
+| `POST /api/jobs/<id>/interview/feedback/` | `{question, answer}`: score, STAR coverage, tips |
+| `GET /api/jobs/<id>/similar/` | Listings most like this one, with shared skills |
+| `GET /api/recommendations/` | Untouched listings closest to those you starred or applied to |
+| `GET /api/profile/review/` | Resume critique with a score and prioritised fixes |
+| `POST /api/ai/ask/` | `{q}`: plain English to Ledger filters (`params` for the Ledger URL) |
+| `POST /api/ai/roadmap/` | `{skill, jobs?, sole_gap?}`: learning plan for one missing skill |
+
 ## Running the scanner
 
 | Method & path | What it does |

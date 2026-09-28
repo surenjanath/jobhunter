@@ -10,6 +10,7 @@ async function openJob(jobId){
 function renderJobTab(j){
   const d=j.details, like=j.likelihood; let html='';
   if(CURRENT_TAB==='match'){ renderMatchTab(j); return; }
+  if(['summary','rewrite','practice','outreach'].includes(CURRENT_TAB)){ renderAiTab(j); return; }
   if(CURRENT_TAB==='overview'){
     const src=(j.source||'').split(':')[0]; const isTT=isLocal(j);
     html=`<div class="kpi"><div class="box"><b>${j.fit_score}</b><span>Fit</span></div><div class="box"><b>${like?like.likelihood:'—'}</b><span>Likelihood</span></div><div class="box"><b>${esc(j.tier||'—').split('—')[0]}</b><span>Tier</span></div><div class="box"><b>${esc(src)}</b><span>Source</span></div></div>

@@ -115,7 +115,7 @@ Object.assign(PAGE_HOOKS,{
   init(d){
     const exp=$('#compareExpand'); if(exp) exp.onclick=()=>{ const x=$('#compareDetail'); if(!x) return; x.hidden=!x.hidden; if(!x.hidden) fillCompare(LAST_BRIEF||{compare:[]}); };
     const cr=$('#coachRefresh'); if(cr) cr.onclick=()=>{ const el=$('#coach'); if(!el) return; el.hidden=!el.hidden; if(!el.hidden) loadCoach(true); };
-    paintHome(d);
+    paintHome(d); paintRecs();
   },
-  refresh:paintHome,
+  refresh:d=>{ paintHome(d); paintRecs(); },
 });

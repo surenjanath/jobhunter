@@ -55,8 +55,14 @@
         </div>
         <div id="todayBlock" class="today"></div>
       </section>
+
+      <section class="sheet" id="recsSheet">
+        <h2 class="sheet-title">Recommended for you <span class="quiet">· ✦ Learned from what you star and apply to ·</span></h2>
+        <p class="co" id="recsHint"></p>
+        <ul class="list" id="recsBox"></ul>
+      </section>
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/home.js' %}?v=1"></script>
+<script src="{% static 'js/home.js' %}?v=2"></script>
 {% endblock %}

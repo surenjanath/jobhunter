@@ -58,6 +58,13 @@ skills, tailoring advice and the list of factors behind the odds.
 
 This is a transparent heuristic model, not a trained classifier. It is only as calibrated as your recorded outcomes.
 
+## AI features (`ai_features.py`, `django_project/ai/`)
+
+Each feature is a deterministic function over your resume profile, the posting and your history, so it works offline. `use_llm=True`
+adds one call through `llm.generate` and the result is validated: rewrites and drafts must not introduce numbers or skills absent from
+the source text (`grounded()`), otherwise the rules output is kept and the UI says so. The Django app `ai` is a thin JSON layer; it
+must be included before `jobs.urls` because `/api/jobs/<path>/…` is greedy.
+
 ## Database (`jobhunt/output/jobhunt.db`)
 
 `jobs` (scored listings incl. `match_json`), `app_status` (status, follow-up, notes, starred), `scans`, `source_runs`
@@ -74,7 +81,7 @@ in-place migrations live in `src/db.py`. The Django models for these tables are 
   `job.js` + `match.js` (job dialog), `charts.js`, and one file per page. A page script registers `PAGE_HOOKS`
   (`beforeLoad`, `init`, `refresh`, `key`) and `boot.js` runs them.
 - **API apps**: `jobs` (jobs, status, filters, export, digest, calendar), `candidate` (resume, preferences, rescoring,
-  deep matching), `trinidad` (local market, sources, employer detection), `analytics` (insights, brief).
+  deep matching), `trinidad` (local market, sources, employer detection), `analytics` (insights, brief), `ai` (summary, rewrite, practice, outreach, recommendations, resume review, ask, roadmap).
 
 ## Configuration files
 

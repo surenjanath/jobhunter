@@ -18,6 +18,7 @@ urlpatterns = [
     path('api/settings', core_views.settings_view, name='settings-no-slash'),
     path('api/activity/', core_views.activity, name='activity'),
     path('api/activity', core_views.activity, name='activity-no-slash'),
+    path('api/', include('ai.urls')),          # also before jobs (see note below)
     path('api/', include('candidate.urls')),   # before jobs: /jobs/<id>/match/ must win over the greedy /jobs/<path>/
     path('api/', include('jobs.urls')),
     path('api/', include('analytics.urls')),

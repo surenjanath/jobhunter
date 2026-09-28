@@ -168,4 +168,4 @@ async function startRescore(){
   }catch(e){ pmsg(e.message,true); [b1,b2].forEach(b=>{ if(b){ b.disabled=false; b.textContent='Re-score all jobs'; } }); }
 }
 
-Object.assign(PAGE_HOOKS,{ init:()=>loadProfile(), refresh:()=>{} });
+Object.assign(PAGE_HOOKS,{ init:()=>{ loadProfile(); paintReview(); }, refresh:()=>{} });

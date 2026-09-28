@@ -50,10 +50,21 @@ an outside provider are opt-in and say so). There is no account and no login.
 **Shows you the picture** (Chart.js, light and dark)
 - **Analytics**: your skills against what listings ask for, coverage by skill area, "learn next" (missing skills that
   block the most listings, restricted to areas you already work in), local vs remote, who remote roles are open to, pay,
-  closing calendar, application funnel with a bottleneck hint, scan history and board health.
+  closing calendar, application funnel with a bottleneck hint, scan history and board health. A **market intelligence** section adds a
+  clickable fit-vs-odds opportunity map, a market-coverage score with a daily trend, skills that are asked for as a pair, employers
+  worth watching, pay by category, the experience listings ask for, and how long roles stay open.
 - **Per job**: radar of the job against your best listings, skills-vs-listing bars, requirement evidence, tailoring advice
   (bullets to lead with, honest wording, what *not* to claim), skill highlighting inside the posting, ATS check,
   interview prep built from the posting and your resume, salary versus your floor and similar listings.
+
+**AI features** (every one works with built-in rules; a model, local or hosted, only *polishes* the result and only when you tick "Polish with AI")
+- **Posting summary and red flags**: a plain-words TL;DR, must-haves, "wear many hats" / unpaid / stale / years-vs-level flags, good signs, and questions to ask them.
+- **Bullet rewriter**: your best resume bullets for the posting, re-worded. A guardrail rejects any rewrite that adds a tool, number or claim your original did not contain.
+- **Interview practice**: write an answer, get a score on STAR structure, numbers, specifics, "I" vs "we" and filler.
+- **Outreach drafts**: follow-up, thank-you, recruiter message and referral ask, built from your best matching bullet.
+- **Resume review**: weak openers, missing numbers, buzzwords, gaps, skills listed but never shown, with your own lines as examples.
+- **Similar listings** and **Recommended for you** (learned from what you star and apply to), **plain-English search** in the command palette
+  ("remote python roles worth applying", "finance jobs in Chaguanas closing soon") and **learning roadmaps** for each "learn next" skill.
 
 **Helps you work the pipeline**
 - Ledger with filters, saved views, multi-select **compare** (up to 4 roles) and bulk actions, keyboard shortcuts,
@@ -174,7 +185,7 @@ scanner tests use their own.
 ## Privacy and responsible use
 
 - **Local by default.** Data is stored in SQLite under `jobhunt/output/` (ignored by git). Nothing is uploaded.
-- **AI is opt-in.** Cover letters and resume enrichment use whichever provider you pin: local Ollama stays on your
+- **AI is opt-in.** The AI features above, cover letters and resume enrichment use whichever provider you pin: local Ollama stays on your
   machine; the Claude Code CLI and Anthropic API send the text you give them to that provider.
 - **Be polite to sites.** Fetchers are rate-limited, use public feeds / sitemaps / APIs where they exist, and only read
   pages that are publicly visible. LinkedIn and Indeed are deliberately **not** scraped (their terms forbid it); use their

@@ -653,6 +653,8 @@ def main() -> int:
         test_profile.run(check, cfg)
         from tests import test_sources
         test_sources.run(check, cfg)
+        from tests import test_ai
+        test_ai.run(check, cfg)
     finally:
         for p in out.glob("cover_*.md"):
             if p not in letters_before:

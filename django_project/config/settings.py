@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'letters',
     'trinidad',
     'candidate',
+    'ai',
     'core',
 ]
 

@@ -29,10 +29,11 @@ function paintInsights(){
       ${fig('Good fit closing ≤7d',o.closing_week)}
       ${fig('Blocked',o.blocked,'US-only, relocation…')}
     </div>
-    <section class="panel wide"><h3>What the data says</h3>
+    <nav class="subnav" aria-label="Sections"><a href="#an-says">What it says</a><a href="#an-grid">Strengths &amp; demand</a><a href="#an-market">Market intelligence</a><a href="#an-best">Best opportunities</a></nav>
+    <section class="panel wide" id="an-says"><h3>What the data says</h3>
       <ul class="insights">${d.insights.map(i=>`<li class="ins-${esc(i.kind)}"><span>${KIND_ICON[i.kind]||'○'}</span> ${esc(i.text)}</li>`).join('')}</ul></section>
 
-    <div class="pgrid">
+    <div class="pgrid" id="an-grid">
       ${panel('cFit','Fit across all listings','local vs remote vs abroad')}
       ${panel('cOdds','Your odds','by verdict',240)}
       ${panel('cSkills','Your skills vs what listings ask for','top 18 skills · length = listings asking',480,'<p class="legend-note"><i class="sw have"></i> you have it <i class="sw rel"></i> adjacent <i class="sw miss"></i> missing</p>')}
@@ -40,7 +41,7 @@ function paintInsights(){
         ${panel('cRadar','Coverage by skill area','share of demanded skills you cover',300)}
         <section class="panel"><h3>Learn next <span class="quiet">missing skills that block the most listings</span></h3>
           <table class="mini"><thead><tr><th>Skill</th><th title="Listings where this is the ONLY thing missing">Only gap</th><th>Asked in</th><th>Local / remote</th></tr></thead><tbody>
-          ${roi.map(g=>`<tr><td><b>${esc(g.skill)}</b><div class="co">${esc(g.category)}</div></td><td><span class="bar-cell"><i style="width:${Math.min(100,g.sole_gap/Math.max(1,roi[0].sole_gap)*100)}%"></i></span> ${g.sole_gap}</td><td>${g.jobs}</td><td class="co">${g.local} / ${g.remote}</td></tr>`).join('')||'<tr><td colspan="4" class="co">No missing required skills across your listings.</td></tr>'}
+          ${roi.map(g=>`<tr><td><b>${esc(g.skill)}</b><div class="co">${esc(g.category)}</div></td><td><span class="bar-cell"><i style="width:${Math.min(100,g.sole_gap/Math.max(1,roi[0].sole_gap)*100)}%"></i></span> ${g.sole_gap}</td><td>${g.jobs}</td><td class="co">${g.local} / ${g.remote} <button type="button" class="text tiny" data-road="${esc(g.skill)}" data-j="${g.jobs}" data-s="${g.sole_gap}" title="A learning plan for ${esc(g.skill)}">✦ plan</button></td></tr>`).join('')||'<tr><td colspan="4" class="co">No missing required skills across your listings.</td></tr>'}
           </tbody></table></section>
       </div>
       ${panel('cStrength','Your most marketable skills','how many listings want each',300)}
@@ -58,14 +59,67 @@ function paintInsights(){
       <section class="panel"><h3>Board health <span class="quiet">latest scan</span></h3>
         <table class="mini"><tbody>${(d.boards||[]).map(b=>`<tr><td>${esc(b.label)}</td><td>${b.ok?(b.count?'●':'○'):'<span class="urgent">✕</span>'} ${b.count} roles</td><td class="co">${(b.ms/1000).toFixed(1)}s${b.error?` · ${esc(b.error.slice(0,60))}`:''}</td></tr>`).join('')||'<tr><td class="co">No scan recorded yet.</td></tr>'}</tbody></table></section>
     </div>
-    <section class="panel wide"><h3>Best opportunities right now <span class="quiet">fit and odds together, blockers removed, not yet applied</span></h3>
+    ${marketBlock(d)}
+    <section class="panel wide" id="an-best"><h3>Best opportunities right now <span class="quiet">fit and odds together, blockers removed, not yet applied</span></h3>
       <ul class="compare">${d.top.map(t=>`<li><button type="button" data-details="${esc(t.job_id)}"><span><span class="who">${esc(t.title)}</span><span class="sub">${esc(t.company)} · ${t.mode==='local'?esc(t.region||'Local'):esc(t.mode)} · ${esc(t.advice)}${t.closes?` · closes ${esc(t.closes)}`:''}</span></span><span class="metric">fit ${t.fit} · <span class="pill ${t.verdict==='Long shot'?'Long':esc(t.verdict)}">${esc(t.verdict)}</span> ~${t.chance}%</span></button></li>`).join('')||'<li class="quiet">Nothing qualifies yet — run a scan or relax your preferences.</li>'}</ul></section>`;
   root.querySelectorAll('[data-details]').forEach(n=>n.onclick=()=>openJob(n.dataset.details));
+  root.querySelectorAll('[data-road]').forEach(b=>b.onclick=()=>openRoadmap(b.dataset.road,+b.dataset.j,+b.dataset.s));
   drawInsightCharts();
+}
+
+// ---- market intelligence (v2): opportunity map, coverage trend, bundles, employers, pay by category, experience, time open --------------
+function marketBlock(d){
+  const m=d.market||{score:0,raise:[]}, ex=d.experience, to=d.time_open, hist=d.history||[];
+  const payL=(d.pay_by_category||{}).local||[], payR=(d.pay_by_category||{}).remote||[];
+  const tbl=(rows,head)=>`<table class="mini"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+  return `<h2 class="sheet-title" id="an-market" style="margin-top:34px">Market intelligence <span class="quiet">· Where to spend your effort ·</span></h2>
+    <div class="pgrid">
+      <section class="panel wide"><h3>Opportunity map <span class="quiet">every unapplied listing: fit across, odds up · click a dot to open it</span></h3>
+        <div class="chartbox" style="height:360px"><canvas id="cMap"></canvas></div>
+        <p class="legend-note">Top right is where to apply. Bottom right is a good fit that is hard to land (competition, remote, blockers).</p></section>
+      <section class="panel"><h3>Market coverage <span class="quiet">how much of what listings ask for your resume covers</span></h3>
+        <div class="mid-num" style="font-size:44px">${m.score}%</div>
+        ${m.raise.length?`<p class="co">Biggest lifts: ${m.raise.map(r=>`<b>${esc(r.skill)}</b> +${r.gain}%`).join(' · ')}</p>`:''}
+        ${hist.length>1?`<div class="chartbox" style="height:190px"><canvas id="cHist"></canvas></div><p class="legend-note">${hist.length} daily snapshots, recorded on every scan.</p>`:'<p class="co">The trend appears after the second day of scanning. One snapshot is stored per day.</p>'}</section>
+      <section class="panel"><h3>Skills that come as a pair <span class="quiet">required together</span></h3>
+        ${tbl(d.bundles.map(b=>`<tr><td><b>${esc(b.a)}</b> + <b>${esc(b.b)}</b></td><td>${b.jobs}</td><td class="co">${b.have_both?'you have both':b.missing.length?'missing '+esc(b.missing.join(', ')):'partly'}</td></tr>`).join('')||'<tr><td colspan="3" class="co">Not enough scored listings yet.</td></tr>',['Pair','Listings',''])}</section>
+      <section class="panel"><h3>Employers worth watching <span class="quiet">most good-fit roles</span></h3>
+        ${tbl(d.employers.map(e=>`<tr><td><b>${esc(e.company)}</b></td><td>${e.good} of ${e.roles}</td><td>fit ${e.avg_fit}</td><td class="co">best odds ${e.best_odds}%${e.recent?` · ${e.recent} new`:''}</td></tr>`).join('')||'<tr><td colspan="4" class="co">No employer has a good-fit role yet.</td></tr>',['Employer','Good fit','Avg','']) }</section>
+      ${payL.length?panel('cPayL','Local pay by category','median stated, TT$ / month',Math.max(160,payL.length*34+50)):''}
+      ${payR.length?panel('cPayR','Remote pay by category','median stated, US$ / month',Math.max(160,payR.length*34+50)):''}
+      ${panel('cExp','Experience listings ask for',`you have ${ex.your_years||0} years · ${ex.levels.map(l=>l.count+' '+l.level).join(', ')}`,230)}
+      ${panel('cOpen','How long roles stay open',to.n?`median ${to.median} days · ${to.n} listings state both dates`:'no listing states both dates yet',230)}
+    </div>`;
+}
+
+function drawMarketCharts(d){
+  const P=palette();
+  const ds=(label,data,color,extra={})=>Object.assign({label,data,backgroundColor:color,borderWidth:0,borderRadius:1},extra);
+  const pts=(mode,blocked)=>d.map.filter(p=>p.mode===mode&&p.blocked===blocked).map(p=>({x:p.fit,y:p.odds,...p}));
+  const col={local:P.ink,remote:P.mute,abroad:P.faint};
+  const sets=['local','remote','abroad'].map(m=>({label:{local:'Local',remote:'Remote',abroad:'On-site abroad'}[m],data:pts(m,false),backgroundColor:col[m],pointRadius:4,pointHoverRadius:7}));
+  sets.push({label:'Blocked',data:d.map.filter(p=>p.blocked).map(p=>({x:p.fit,y:p.odds,...p})),backgroundColor:'transparent',borderColor:P.gap,borderWidth:1.5,pointRadius:4,pointStyle:'crossRot'});
+  mk('cMap',{type:'scatter',data:{datasets:sets},options:{
+    onClick:(e,els,chart)=>{ if(!els.length) return; const p=chart.data.datasets[els[0].datasetIndex].data[els[0].index]; if(p&&p.job_id) openJob(p.job_id); },
+    onHover:(e,els)=>{ e.native.target.style.cursor=els.length?'pointer':'default'; },
+    scales:{x:{min:30,max:Math.min(100,Math.ceil(Math.max(60,...d.map.map(p=>p.fit))/10)*10+5),title:{display:true,text:'Fit'}},y:{min:0,max:Math.min(100,Math.ceil(Math.max(20,...d.map.map(p=>p.odds))/10)*10+10),title:{display:true,text:'Odds %'}}},
+    plugins:{tooltip:{callbacks:{label:c=>`${c.raw.title} · ${c.raw.company} (fit ${c.raw.x}, odds ${c.raw.y})`}}}}});
+  if((d.history||[]).length>1){
+    const h=d.history;
+    mk('cHist',{type:'line',data:{labels:h.map(x=>x.day.slice(5)),datasets:[{label:'Coverage %',data:h.map(x=>x.coverage),borderColor:P.ink,tension:.3,borderWidth:2,pointRadius:2},{label:'Good-fit listings',data:h.map(x=>x.good),borderColor:P.mute,tension:.3,borderWidth:2,pointRadius:2,yAxisID:'y1'}]},
+      options:{scales:{x:{grid:{display:false}},y:{beginAtZero:true,max:100},y1:{position:'right',beginAtZero:true,grid:{display:false},ticks:{precision:0}}}}});
+  }
+  const hbar=(id,rows,color)=>mk(id,{type:'bar',data:{labels:rows.map(r=>`${r.category} (${r.n})`),datasets:[{data:rows.map(r=>r.median),backgroundColor:color,borderWidth:0}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`median ${c.raw.toLocaleString()} · top ${rows[c.dataIndex].top.toLocaleString()}`}}},scales:{x:{beginAtZero:true},y:{grid:{display:false}}}}});
+  const pc=d.pay_by_category||{}; if((pc.local||[]).length) hbar('cPayL',pc.local,P.ink); if((pc.remote||[]).length) hbar('cPayR',pc.remote,P.mute);
+  const ex=d.experience, yr=ex.your_years||0, mine=yr<=1?1:yr<=3?2:yr<=5?3:yr<=8?4:5;
+  mk('cExp',{type:'bar',data:{labels:ex.bins.map(b=>b.label),datasets:[{data:ex.bins.map(b=>b.count),backgroundColor:ex.bins.map((b,i)=>i===mine?P.ink:P.faint),borderWidth:0}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:c=>c.dataIndex===mine?'← where you are':''}}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0}}}}});
+  const to=d.time_open;
+  mk('cOpen',{type:'bar',data:{labels:to.bins.map(b=>b.label+' d'),datasets:[{data:to.bins.map(b=>b.count),backgroundColor:P.mute,borderWidth:0}]},options:{plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0}}}}});
 }
 
 function drawInsightCharts(){
   const d=AN, P=palette();
+  drawMarketCharts(d);
   const bar=(id,labels,datasets,opt={})=>mk(id,{type:'bar',data:{labels,datasets},options:Object.assign({scales:{x:{grid:{display:false},stacked:!!opt.stacked},y:{beginAtZero:true,stacked:!!opt.stacked,ticks:{precision:0}}}},opt.options||{})});
   const ds=(label,data,color,extra={})=>Object.assign({label,data,backgroundColor:color,borderWidth:0,borderRadius:1},extra);
 
