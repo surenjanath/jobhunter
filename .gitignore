@@ -50,3 +50,6 @@ dist/
 .idea/
 .vscode/
 *.swp
+
+# generated walkthrough video + guide (large binaries; regenerate with the app-walkthrough skill)
+walkthrough/
