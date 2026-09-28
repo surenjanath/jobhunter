@@ -20,6 +20,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import src  # noqa: E402,F401  (first-run: creates config/*.yaml from the *.example templates)
+
 # Use a temp DB for tests so live data is not polluted
 import os
 os.environ["JOBHUNT_DB"] = str(ROOT / "output" / ".test.db")
