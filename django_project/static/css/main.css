@@ -374,3 +374,7 @@ mark.hl.have{background:rgba(127,127,120,.18)}
 .subtabs[hidden]{display:none}
 .subtabs .tab{padding:8px 0;color:var(--mute)}
 .subtabs .tab.active{color:var(--ink);border-bottom-color:var(--ink)}
+/* alerts strip lines up with the content frame and leaves room before the sheet */
+#alerts{width:min(1180px,100%);margin:0 auto}
+#alerts .banner{padding:0 0 16px;font-size:14px;color:var(--mute)}
+#alerts .banner a{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
