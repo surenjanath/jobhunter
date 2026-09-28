@@ -104,7 +104,7 @@ def strengths(rows, limit=10):
     yrs = {}
     for r in rows:
         for it in ((r["match"] or {}).get("skills") or {}).get("items", []):
-            if it["status"] == "have":
+            if it["status"] == "have" and it.get("category") != "Languages (spoken)":   # "English" is not a marketable technical skill
                 c[it["name"]] += 1
                 yrs[it["name"]] = max(yrs.get(it["name"], 0), it.get("years", 0))
     return [{"skill": k, "jobs": v, "years": yrs[k]} for k, v in c.most_common(limit)]
@@ -273,7 +273,7 @@ def funnel(rows, today):
                 if not n_applied else f"Only {n_applied} decided application{'s' if n_applied != 1 else ''} so far — conversion rates need 10+ applications to mean anything.")
     elif conv["applied_to_response"] is not None and conv["applied_to_response"] < 15:
         hint = "Few replies: the bottleneck is at the top — targeting or resume fit. Apply to higher-odds roles and tailor the bullets the Match tab suggests."
-    elif interviews and conv["interview_to_offer"] is not None and conv["interview_to_offer"] < 20:
+    elif interviews >= 3 and conv["interview_to_offer"] is not None and conv["interview_to_offer"] < 20:
         hint = "You get interviews but few offers: work on interview prep and negotiation, not the CV."
     else:
         hint = "Funnel looks healthy — keep the volume steady and follow up on stale applications."
@@ -346,6 +346,127 @@ def text_insights(rows, data, today):
     return out
 
 
+# ---------------------------------------------------------------------------
+# analytics v2
+# ---------------------------------------------------------------------------
+
+def opportunity_map(rows, limit=400):
+    """Fit (x) vs odds (y) for every listing that fits at all — the picture of where to spend effort."""
+    pts = [{"job_id": r["job_id"], "title": r["title"][:60], "company": r["company"][:40], "fit": r["fit"], "odds": r["likelihood"],
+            "mode": _mode(r), "blocked": bool(((r["match"] or {}).get("blockers")))} for r in rows if r["fit"] >= 30 and r["status"] in ("New", "Shortlisted")]
+    pts.sort(key=lambda p: -(p["fit"] + p["odds"]))
+    return pts[:limit]
+
+
+def skill_bundles(rows, limit=10):
+    """Pairs of skills that keep appearing together as requirements, and whether you have both."""
+    from itertools import combinations
+    pair, status = Counter(), {}
+    for r in rows:
+        items = [i for i in ((r["match"] or {}).get("skills") or {}).get("items", []) if i["status"] != "soft" and i["kind"] == "required"]
+        for i in items:
+            status[i["name"]] = i["status"]
+        for a, b in combinations(sorted({i["name"] for i in items}), 2):
+            pair[(a, b)] += 1
+    out = []
+    for (a, b), n in pair.most_common(limit * 3):
+        sa, sb = status.get(a), status.get(b)
+        out.append({"a": a, "b": b, "jobs": n, "have_both": sa == "have" and sb == "have",
+                    "missing": [x for x, s in ((a, sa), (b, sb)) if s == "missing"]})
+    return out[:limit]
+
+
+def employers(rows, today, limit=12):
+    """Employers with the most good-fit, unblocked roles, and how many they posted recently."""
+    week = (today - timedelta(days=14)).isoformat()
+    g = defaultdict(list)
+    for r in rows:
+        if r["company"] and r["company"] not in ("Unknown", "Confidential", "Employer Confidential"):
+            g[r["company"]].append(r)
+    out = []
+    for name, rs in g.items():
+        good = [r for r in rs if r["fit"] >= 50 and not ((r["match"] or {}).get("blockers"))]
+        if good:
+            out.append({"company": name, "roles": len(rs), "good": len(good), "avg_fit": _avg(r["fit"] for r in good),
+                        "best_odds": max(r["likelihood"] for r in good), "recent": sum(((r["posted_at"] or r["first_seen"] or "")[:10]) >= week for r in rs),
+                        "mode": _mode(good[0])})
+    out.sort(key=lambda e: (-e["good"], -e["avg_fit"]))
+    return out[:limit]
+
+
+def salary_by_category(rows, min_n=3):
+    """Median stated monthly pay per category: TT$ for local roles, US$ for remote."""
+    g = defaultdict(list)
+    for r in rows:
+        pay = ((r["match"] or {}).get("job") or {}).get("pay")
+        if pay:
+            g[("local" if _local(r) else "remote", r["category"] or "Other")].append(pay["monthly_ttd_max"] if _local(r) else pay["monthly_usd_max"])
+    out = {"local": [], "remote": []}
+    for (kind, cat), vals in g.items():
+        if len(vals) >= min_n:
+            out[kind].append({"category": cat, "n": len(vals), "median": round(statistics.median(vals)), "top": max(vals)})
+    for k in out:
+        out[k].sort(key=lambda x: -x["median"])
+    return out
+
+
+def experience_asked(rows, years):
+    """How many years listings ask for vs how many you have, and how senior the roles are."""
+    bins = [{"label": l, "count": 0} for l in ("not stated", "0-1", "2-3", "4-5", "6-8", "9+")]
+    levels = Counter()
+    for r in rows:
+        j = (r["match"] or {}).get("job") or {}
+        y = j.get("min_years")
+        i = 0 if y is None else 1 if y <= 1 else 2 if y <= 3 else 3 if y <= 5 else 4 if y <= 8 else 5
+        bins[i]["count"] += 1
+        lv = j.get("level")
+        if lv is not None:
+            levels["entry" if lv < 0.75 else "mid" if lv < 1.75 else "senior" if lv < 2.75 else "lead"] += 1
+    return {"bins": bins, "your_years": years, "levels": [{"level": k, "count": levels[k]} for k in ("entry", "mid", "senior", "lead")]}
+
+
+def time_open(rows):
+    """Days between posting and closing (local boards state both): how long roles stay open."""
+    days = []
+    for r in rows:
+        a, b = _d(r["posted_at"]), _d(r["expires_at"])
+        if a and b and 0 <= (b - a).days <= 120:
+            days.append((b - a).days)
+    bins = [{"label": l, "count": 0} for l in ("≤7", "8-14", "15-21", "22-30", "31-45", "46+")]
+    for d in days:
+        bins[0 if d <= 7 else 1 if d <= 14 else 2 if d <= 21 else 3 if d <= 30 else 4 if d <= 45 else 5]["count"] += 1
+    return {"bins": bins, "median": round(statistics.median(days)) if days else None, "n": len(days)}
+
+
+def market_score(rows, profile):
+    """One number for how well your resume covers what the market asks for, and the skills that would raise it most."""
+    tot = got = 0.0
+    lift = Counter()
+    for r in rows:
+        for it in ((r["match"] or {}).get("skills") or {}).get("items", []):
+            if it["status"] == "soft":
+                continue
+            w = it["weight"]
+            tot += w
+            got += w * (1 if it["status"] == "have" else 0.5 if it["status"] == "related" else 0)
+            if it["status"] == "missing":
+                lift[it["name"]] += w
+            elif it["status"] == "related":
+                lift[it["name"]] += w * 0.5
+    focus = focus_categories(profile)
+    cat = {it["name"]: it.get("category") for r in rows for it in ((r["match"] or {}).get("skills") or {}).get("items", [])}
+    best = [{"skill": k, "gain": round(100 * v / tot, 1)} for k, v in lift.most_common(40) if not focus or cat.get(k) in focus][:5] if tot else []
+    return {"score": round(100 * got / tot) if tot else 0, "raise": best}
+
+
+def history_from_db(limit=60):
+    from jobs.models import Snapshot
+    import json as _json
+    return [{"day": s.day, "total": s.total, "good": s.good, "decent": s.decent, "local": s.local, "remote": s.remote, "avg_fit": s.avg_fit,
+             "avg_odds": s.avg_odds, "coverage": s.coverage, "top_skills": _json.loads(s.top_skills or "[]")}
+            for s in Snapshot.objects.using("jobhunt").order_by("-day")[:limit]][::-1]
+
+
 def build(rows, prefs=None, today=None, profile=None):
     today = today or date.today()
     prefs = prefs or {}
@@ -371,6 +492,9 @@ def build(rows, prefs=None, today=None, profile=None):
         "categories": by_category(rows), "sources": by_source(rows), "timeline": timeline(rows, today), "closing": closing(rows, today),
         "salary": salary(rows, prefs), "remote_scopes": remote_scopes(rows), "funnel": funnel(rows, today),
         "top": top_opportunities(rows),
+        "map": opportunity_map(rows), "bundles": skill_bundles(rows), "employers": employers(rows, today),
+        "pay_by_category": salary_by_category(rows), "experience": experience_asked(rows, float((profile or {}).get("years_experience") or 0)),
+        "time_open": time_open(rows), "market": market_score(rows, profile),
     }
     data["insights"] = text_insights(rows, data, today)
     return data

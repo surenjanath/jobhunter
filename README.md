@@ -62,6 +62,39 @@ an outside provider are opt-in and say so). There is no account and no login.
   (`python -m src.digest`), CSV export, cover-letter drafting (Claude Code CLI, Ollama, Anthropic API, or a template
   that needs nothing).
 
+## Screenshots
+
+The screenshots use a **fictional resume** ("Alex Morgan") and sample application history scored against real, publicly
+listed jobs. Nothing here is anyone's personal data.
+
+**Conditions**: where to spend today. Best odds, new roles worth your time, closing soon, follow-ups due.
+![Conditions](docs/screenshots/01-conditions.jpg)
+
+**Ledger**: every role ranked by fit and odds, with a local / remote switch, saved views, compare and bulk actions.
+![Ledger](docs/screenshots/02-ledger.jpg)
+
+**Match**: why a role scores the way it does. Radar against your best listings, what the posting asks for versus what
+you have, where it ranks, then per-requirement resume evidence and every factor behind the odds.
+![Match tab](docs/screenshots/03-match.jpg)
+
+**Compare** up to four roles side by side.
+![Compare](docs/screenshots/04-compare.jpg)
+
+**Analytics**: plain-English findings, then charts on fit, odds, your skills against what listings ask for, coverage by
+skill area and what to learn next. Light and dark themes.
+![Analytics](docs/screenshots/05-analytics.jpg)
+![Analytics: skills](docs/screenshots/06-analytics-skills.jpg)
+![Analytics, dark theme](docs/screenshots/07-analytics-dark.jpg)
+
+**Profile**: your resume, read properly. Extracted roles, skills with years of use (editable), preferences and calibration.
+![Profile](docs/screenshots/08-profile.jpg)
+
+**Trinidad**: the local market by region, category and employer, plus board health and one-click employer detection.
+![Trinidad](docs/screenshots/09-trinidad.jpg)
+
+**Pipeline**: applications, follow-ups and your funnel.
+![Pipeline](docs/screenshots/10-pipeline.jpg)
+
 ## Quick start
 
 Requires Python 3.12+. For PDF resumes install poppler (`brew install poppler` / `apt install poppler-utils`); DOCX,

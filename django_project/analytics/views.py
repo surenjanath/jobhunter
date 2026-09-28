@@ -145,6 +145,7 @@ def insights(request):
         from . import insights as ins
         data = ins.build(ins.rows_from_db(), profile_store.get_prefs(), profile=profile_store.active_profile())
         data.update(ins.scan_history())
+        data["history"] = ins.history_from_db()
         return Response(data)
     except Exception as e:
         import traceback

@@ -98,6 +98,10 @@ class TrackingTests(ScannerDBTestCase):
         self.assertEqual([j["job_id"] for j in d["overdue"]], ["a"])
         self.assertEqual(sorted(j["job_id"] for j in d["closing_soon"]), ["a", "b"])  # tracked + starred, both close in 3d
         self.assertEqual(d["counts"]["overdue"], 1)
+        # a job with NO status row at all is not "tracked", however soon it closes
+        self.make_job("c9", title="Untouched", expires_at=iso(1))
+        d2 = json.loads(self.client.get("/api/followups/").content)
+        self.assertNotIn("c9", [j["job_id"] for j in d2["closing_soon"]])
 
 
 class CalendarAndDigestTests(ScannerDBTestCase):

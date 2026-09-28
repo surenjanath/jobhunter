@@ -176,7 +176,7 @@ def followups(request):
     soon = (date.today() + timedelta(days=int(request.GET.get("days", 7) or 7))).isoformat()
     qs = queries.base_queryset()
     due = qs.exclude(applicationstatus__followup_date="").filter(applicationstatus__followup_date__lte=soon)
-    tracked = qs.filter(Q(applicationstatus__starred=True) | ~Q(applicationstatus__status__in=["New", "Rejected", "Passed on it", "Withdrawn", "Closed"]))
+    tracked = qs.filter(Q(applicationstatus__starred=True) | Q(applicationstatus__status__in=["Shortlisted", "Applied", "Interviewing", "Interview", "Offer"]))   # positive match: jobs with no status row are not tracked
     closing = tracked.exclude(expires_at="").filter(expires_at__gte=today, expires_at__lte=soon)
     ser = queries.serialize
     overdue = [ser(j) for j in due.filter(applicationstatus__followup_date__lt=today).order_by("applicationstatus__followup_date")]

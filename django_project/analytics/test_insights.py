@@ -114,3 +114,66 @@ class InsightsTests(SimpleTestCase):
         self.assertIn("relocation", texts)            # good fit but on-site abroad
         json.dumps(d)                                 # payload must be serialisable
         self.assertEqual(ins.build([], {}, today=TODAY)["insights"][0]["kind"], "info")
+
+
+class InsightsV2Tests(SimpleTestCase):
+    def rows(self):
+        pay = {"currency": "TTD", "monthly_ttd_max": 9000, "monthly_usd_max": 1300}
+        return [
+            row("a", 80, 60, skills=[skill("Python", "have"), skill("Kubernetes", "missing")], company="Acme"),
+            row("b", 70, 50, skills=[skill("Python", "have"), skill("Kubernetes", "missing")], company="Acme"),
+            row("c", 60, 40, region="Port of Spain", mode="onsite", skills=[skill("SQL", "related")], company="Corp", pay=pay,
+                posted_at=iso(-10), expires_at=iso(4)),
+            row("d", 20, 5, skills=[], company="Low"),
+            row("e", 65, 30, skills=[skill("Python", "have")], company="Blocked Co", blockers=["US only"]),
+        ]
+
+    def test_opportunity_map_only_open_fitting_roles(self):
+        pts = ins.opportunity_map(self.rows() + [row("z", 90, 90, status="Applied")])
+        ids = [p["job_id"] for p in pts]
+        self.assertNotIn("z", ids)
+        self.assertNotIn("d", ids)             # fit < 30
+        self.assertTrue(next(p for p in pts if p["job_id"] == "e")["blocked"])
+        self.assertEqual(ids[0], "a")
+
+    def test_skill_bundles_pair_requirements(self):
+        b = ins.skill_bundles(self.rows())
+        top = b[0]
+        self.assertEqual((top["a"], top["b"], top["jobs"]), ("Kubernetes", "Python", 2))
+        self.assertEqual(top["missing"], ["Kubernetes"])
+        self.assertFalse(top["have_both"])
+
+    def test_employers_group_good_unblocked_roles(self):
+        e = {x["company"]: x for x in ins.employers(self.rows(), TODAY)}
+        self.assertEqual(e["Acme"]["good"], 2)
+        self.assertNotIn("Blocked Co", e)       # its only good-fit role is blocked
+        self.assertNotIn("Low", e)
+
+    def test_pay_by_category_needs_enough_data(self):
+        self.assertEqual(ins.salary_by_category(self.rows(), min_n=3), {"local": [], "remote": []})
+        out = ins.salary_by_category(self.rows(), min_n=1)
+        self.assertEqual(out["local"][0]["median"], 9000)
+
+    def test_experience_asked_and_time_open(self):
+        rows = self.rows()
+        rows[0]["match"]["job"].update(min_years=4, level=2.0)
+        rows[1]["match"]["job"].update(min_years=1, level=1.0)
+        e = ins.experience_asked(rows, 6.0)
+        self.assertEqual(e["your_years"], 6.0)
+        self.assertEqual(next(b["count"] for b in e["bins"] if b["label"] == "4-5"), 1)
+        self.assertEqual(next(l["count"] for l in e["levels"] if l["level"] == "senior"), 1)
+        t = ins.time_open(rows)
+        self.assertEqual(t["n"], 1)
+        self.assertEqual(t["median"], 14)        # posted 10 days ago, closes in 4
+
+    def test_market_score_and_what_would_raise_it(self):
+        m = ins.market_score(self.rows(), {"skills": {"Python": {"category": "Web & Backend"}, "Django": {"category": "Web & Backend"}}})
+        self.assertGreater(m["score"], 0)
+        self.assertEqual(m["raise"][0]["skill"], "Kubernetes")
+        self.assertGreater(m["raise"][0]["gain"], 0)
+
+    def test_build_includes_v2_sections_and_is_json_safe(self):
+        d = ins.build(self.rows(), {}, today=TODAY, profile={"skills": {}, "years_experience": 5})
+        for k in ("map", "bundles", "employers", "pay_by_category", "experience", "time_open", "market"):
+            self.assertIn(k, d)
+        json.dumps(d)

@@ -103,3 +103,24 @@ class SourceRun(models.Model):
         db_table = "source_runs"
         ordering = ["-id"]
         app_label = "jobs"
+
+
+class Snapshot(models.Model):
+    """One row per day: the market as your resume sees it (written by jobhunt/src/snapshot.py)."""
+    day = models.TextField(primary_key=True)
+    total = models.IntegerField(default=0)
+    good = models.IntegerField(default=0)
+    decent = models.IntegerField(default=0)
+    local = models.IntegerField(default=0)
+    remote = models.IntegerField(default=0)
+    avg_fit = models.FloatField(default=0)
+    avg_odds = models.FloatField(default=0)
+    coverage = models.FloatField(default=0)
+    top_skills = models.TextField(blank=True, default="[]")
+    created_at = models.TextField(blank=True, default="")
+
+    class Meta:
+        managed = False
+        db_table = "snapshots"
+        ordering = ["day"]
+        app_label = "jobs"

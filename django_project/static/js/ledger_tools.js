@@ -50,7 +50,7 @@ async function openCompare(){
     $('#cmpBody').innerHTML=`<div class="cmpgrid">
       <div><div class="mviz-t">Fit profile</div><div class="mbox" style="height:280px"><canvas id="cmpRadar"></canvas></div></div>
       <div><table class="cmp"><thead><tr><th></th>${jobs.map((j,i)=>`<th><i class="sw" style="background:${CMP_COLORS()[i]}"></i>${esc(j.title.slice(0,32))}<div class="co">${esc(j.company)}</div></th>`).join('')}</tr></thead><tbody>
-      ${rows.map(([label,f,mode,fmt])=>{ const mx=best(f,mode); return `<tr><td class="co">${label}</td>${jobs.map(j=>{ const v=f(j); const win=mode==='max'&&v!=null&&v===mx&&jobs.length>1; return `<td class="${win?'win':''}">${esc(fmt?fmt(v):v)}</td>`; }).join('')}</tr>`; }).join('')}
+      ${rows.map(([label,f,mode,fmt])=>{ const mx=best(f,mode); return `<tr><td class="co">${label}</td>${jobs.map(j=>{ const v=f(j); const distinct=new Set(jobs.map(x=>f(x))).size>1; const win=mode==='max'&&distinct&&v!=null&&v===mx; return `<td class="${win?'win':''}">${esc(fmt?fmt(v):v)}</td>`; }).join('')}</tr>`; }).join('')}
       </tbody></table></div></div>`;
     const P=palette(), keys=['skills','evidence','title','experience','domain','preferences'], cols=CMP_COLORS();
     mk('cmpRadar',{type:'radar',data:{labels:['Skills','Evidence','Title','Experience','Domain','Preferences'],datasets:jobs.map((j,i)=>({label:j.title.slice(0,26),data:keys.map(k=>j.m.breakdown[k]??0),borderColor:cols[i],backgroundColor:'transparent',pointBackgroundColor:cols[i],borderWidth:2}))},
