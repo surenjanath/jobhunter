@@ -197,8 +197,11 @@ def _validate_site(data):
 
 @api_view(["POST"])
 def detect_site(request):
-    """Paste an employer's careers URL: find which applicant-tracking system it uses (and how many T&T jobs it has)."""
-    from src import ats_sources
+    """Paste an employer's careers URL: find which applicant-tracking system it uses (and how many T&T jobs it has).
+    When no known ATS is found, also try reading the page itself for job-shaped links — real title/dates when the
+    detail pages publish schema.org data, the link text or the page's own heading otherwise — so a plain HTML
+    careers page still works, not only the boards this project has an adapter for."""
+    from src import ats_sources, trinidad as tt
     url = str((request.data or {}).get("url") or "").strip()
     if not url or len(url) > 300:
         return Response({"error": "give the employer's careers page URL"}, status=400)
@@ -210,8 +213,18 @@ def detect_site(request):
             except Exception as e:  # noqa: BLE001
                 c["sample"] = 0
                 c["error"] = str(e)[:160]
-    return Response({"url": url, "candidates": found,
-                     "hint": "" if found else "No known applicant-tracking system found on that page. Try the employer's jobs/careers page, or add its job sitemap manually."})
+    generic = None
+    if not found:
+        generic = {"ok": False, "count": 0, "pattern": tt.GENERIC_JOB_PATTERN, "sample": [], "error": ""}
+        try:
+            rows = tt.run_source("probe", lambda: tt.fetch_custom_site(
+                {"name": "probe", "list_url": url, "url_pattern": tt.GENERIC_JOB_PATTERN}, 15), "probe")
+            generic.update(ok=bool(rows), count=len(rows), sample=[r["title"] for r in rows[:5]])
+        except Exception as e:  # noqa: BLE001 — an unreachable or empty page is a result to show, not a 500
+            generic["error"] = str(e)[:200]
+    hint = "" if (found or (generic and generic["ok"])) else \
+        "No known applicant-tracking system, and no job-shaped links found on that exact page. Try the page that actually lists the openings (not the homepage), or add it manually as a sitemap below."
+    return Response({"url": url, "candidates": found, "generic": generic, "hint": hint})
 
 
 @api_view(["POST"])

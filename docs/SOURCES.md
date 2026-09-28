@@ -53,6 +53,18 @@ trinidad_custom_sites:
 
 Test it first with the form on the Trinidad page (it shows a sample without saving) or `POST /api/sources/custom/test/`.
 
+### `list_url` without JobPosting data — any plain HTML careers page
+
+`list_url` doesn't actually require JSON-LD. When a job's detail page has none, the listing page's own link text
+becomes the title (its `<h1>` or `<title>` if the link text isn't usable — "Apply Now", "Read more" and similar are
+recognised and skipped in favour of the page's own heading). Dates, pay and a real description only come through
+when the site *does* publish structured data; without it you get a title, a URL, and a company guessed from the
+domain — enough to get the role into the Ledger and Pipeline, which is the point of pasting an arbitrary careers
+page in the first place. `url_pattern` is what keeps this from picking up every nav link on the page — the
+"Add an employer" form on the Trinidad page tries a broad default (`/jobs`, `/careers`, `/vacancy`, `/openings`,
+`/positions`, `/opportunity`, in the URL path) automatically when no known ATS is found, and shows a preview before
+you save; tighten `url_pattern` yourself for a noisier page.
+
 ## Write a new built-in source
 
 1. Add `fetch_<name>(limit)` to `jobhunt/src/trinidad.py` (Trinidad) or `sources_extra.py` (remote). Return dicts through

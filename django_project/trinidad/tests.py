@@ -52,6 +52,32 @@ class SourceRegistryTests(ScannerDBTestCase):
         self.assertEqual(d["count"], 1)
         self.assertEqual(self.client.post("/api/sources/nope/test/").status_code, 404)
 
+    def test_detect_falls_back_to_generic_scrape_when_no_known_ats(self):
+        from src import ats_sources, trinidad as tt
+        list_page = ('<html><body><a href="/careers/senior-accountant-123">Senior Accountant</a>'
+                    '<a href="/careers/warehouse-lead-456">Warehouse Lead</a></body></html>')
+        detail = "<html><body>plain prose, no structured data</body></html>"
+
+        def fake_fetch(u, p=None, **k):
+            return list_page if u == "https://acme.tt/careers" else detail
+
+        with mock.patch.object(ats_sources, "detect", return_value=[]), mock.patch.object(tt, "fetch", side_effect=fake_fetch):
+            r = self.client.post("/api/sources/detect/", data=json.dumps({"url": "https://acme.tt/careers"}), content_type="application/json")
+        d = json.loads(r.content)
+        self.assertEqual(d["candidates"], [])
+        self.assertTrue(d["generic"]["ok"])
+        self.assertEqual(d["generic"]["count"], 2)
+        self.assertIn("Senior Accountant", d["generic"]["sample"])
+        self.assertEqual(d["hint"], "")
+
+    def test_detect_generic_fallback_reports_nothing_found(self):
+        from src import ats_sources, trinidad as tt
+        with mock.patch.object(ats_sources, "detect", return_value=[]), mock.patch.object(tt, "fetch", return_value="<html><body>no links here</body></html>"):
+            r = self.client.post("/api/sources/detect/", data=json.dumps({"url": "https://acme.tt/"}), content_type="application/json")
+        d = json.loads(r.content)
+        self.assertFalse(d["generic"]["ok"])
+        self.assertTrue(d["hint"])
+
     def test_custom_site_validation(self):
         def post(body):
             return self.client.post("/api/sources/custom/test/", data=json.dumps(body), content_type="application/json")

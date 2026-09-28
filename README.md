@@ -24,8 +24,9 @@ an outside provider are opt-in and say so). There is no account and no login.
 - **9 Trinidad & Tobago sources**: CaribbeanJobs, JobsTT, TrinidadJob, EmployTT (government), FindWorkTT,
   IslandJobHunt, Caribbean Jobs Online, Eve Anderson Recruitment, Digicel careers.
 - **Any Trinidad employer, in two clicks**: paste a careers URL and JobHunter detects the applicant-tracking system
-  (Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, Workday) and keeps only jobs located in T&T. Sites that
-  publish `schema.org/JobPosting` data can be added by sitemap.
+  (Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, Workday) and keeps only jobs located in T&T. No known
+  ATS? It reads the page itself — the listing's own job links and titles — so a plain HTML careers page works too, with
+  a preview before you save it. Sites that publish `schema.org/JobPosting` data get full quality (real dates, pay).
 - **Remote boards**: Remotive, RemoteOK, Arbeitnow, Himalayas, Hacker News "Who is hiring", WeWorkRemotely, Jobicy,
   Working Nomads, Get on Board, plus company boards on Greenhouse / Lever / Ashby. Optional Jooble (API key).
 - Stable ids (no duplicates between scans), expired postings dropped, region and category on every local job, per-board

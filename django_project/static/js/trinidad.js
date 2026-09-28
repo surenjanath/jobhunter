@@ -1,6 +1,7 @@
 // trinidad.js — the Trinidad page: local market summary, board health, custom sites.
 const barRow=(label,n,max,onclick)=>`<div class="hbar" ${onclick?`data-filter="${esc(onclick)}"`:''}><span class="hbar-l">${esc(label)}</span><span class="hbar-t"><i style="width:${max?Math.max(2,Math.round(n/max*100)):0}%"></i></span><span class="hbar-n">${n}</span></div>`;
 const STATUS_TXT={healthy:'Healthy',error:'Failing',empty:'No postings','never run':'Not run yet'};
+function _company_slug(url){ try{ return new URL(url).hostname.replace(/^(www\.|careers\.|jobs\.)/,'').split('.')[0]; }catch(e){ return ''; } }
 async function renderTrinidad(){
   const el=$('#trinidadBody'); if(!el) return;
   el.innerHTML='<p class="quiet">Reading the local market…</p>';
@@ -33,7 +34,7 @@ async function renderTrinidad(){
         <td style="white-space:nowrap"><button class="sm" data-test="${esc(x.name)}">Test</button>${x.custom?` <button class="sm" data-rm="${esc(x.name)}">Remove</button>`:''}<div class="co" data-testout="${esc(x.name)}"></div></td>
       </tr>`).join('')}</tbody></table>
       <details class="addsite" open><summary>Add an employer from its careers page</summary>
-        <p class="quiet">Paste a careers URL (a Greenhouse, Lever, Workday, SmartRecruiters, Workable, Recruitee or Ashby board, or an employer site that links to one). Only jobs located in Trinidad &amp; Tobago are kept.</p>
+        <p class="quiet">Paste a careers URL — a Greenhouse, Lever, Workday, SmartRecruiters, Workable, Recruitee or Ashby board works best (full listings with real dates and pay), but a plain HTML careers page works too: it reads that page's own job links and titles. Only jobs located in Trinidad &amp; Tobago are kept.</p>
         <div class="addgrid"><input id="dtUrl" placeholder="https://company.com/careers or https://boards.greenhouse.io/company"><input id="dtName" placeholder="Short name (letters/digits), e.g. massy"></div>
         <div class="actions"><button type="button" id="dtGo">Detect</button><span class="quiet" id="dtMsg"></span></div>
         <div id="dtOut"></div>
@@ -69,14 +70,31 @@ async function renderTrinidad(){
   if(dtGo) dtGo.onclick=async()=>{
     const msg=$('#dtMsg'), out=$('#dtOut'); msg.textContent='Looking…'; out.innerHTML='';
     try{
-      const r=await jfetch('/api/sources/detect/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:$('#dtUrl').value.trim()})});
-      msg.textContent=r.candidates.length?`Found ${r.candidates.length} board${r.candidates.length>1?'s':''}`:(r.hint||'Nothing found');
+      const url=$('#dtUrl').value.trim();
+      const r=await jfetch('/api/sources/detect/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+      msg.textContent=r.candidates.length?`Found ${r.candidates.length} board${r.candidates.length>1?'s':''}`:(r.generic&&r.generic.ok?`Found ${r.generic.count} job-shaped link${r.generic.count!==1?'s':''} on the page itself`:(r.hint||'Nothing found'));
       out.innerHTML=r.candidates.map((c,i)=>c.ats?`<div class="cand"><b>${esc(c.ats)}</b> <code>${esc(c.slug||c.tenant+'/'+c.site)}</code> · ${c.error?`<span class="urgent">${esc(c.error)}</span>`:`${c.sample} Trinidad &amp; Tobago job${c.sample!==1?'s':''} right now`} <button type="button" class="sm" data-addcand="${i}">Add</button></div>`:`<div class="cand co">${esc(c.note)}</div>`).join('');
       out.querySelectorAll('[data-addcand]').forEach(b=>b.onclick=async()=>{
         const c=r.candidates[+b.dataset.addcand]; const name=($('#dtName').value.trim()||c.slug||c.tenant||'').toLowerCase().replace(/[^a-z0-9_]/g,'');
         try{ await jfetch('/api/sources/custom/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...c,name,label:$('#dtName').value.trim()||name,force:true})}); toast('Employer added — included from the next scan'); renderTrinidad(); }
         catch(e){ toast(e.message,'bad'); }
       });
+      // no known applicant-tracking system, but the page itself has job-shaped links: offer to add it as-is
+      const g=r.generic;
+      if(!r.candidates.length && g){
+        out.innerHTML+= g.ok
+          ? `<div class="cand"><b>This page's own links</b> · ${g.count} found, e.g. “${esc(g.sample[0]||'')}”${g.sample.length>1?`, “${esc(g.sample[1]||'')}”…`:''} <span class="co">(titles only where the site gives no structured data — dates/pay/description fill in once it does)</span> <button type="button" class="sm go" id="dtAddGeneric">Add this site</button></div>`
+          : `<div class="cand co">${g.error?`Couldn't read that page: ${esc(g.error)}`:'No job-shaped links on that exact page.'} Paste the page that actually lists the openings, not the homepage — or add it manually below with your own URL pattern.</div>`;
+        const ag=$('#dtAddGeneric');
+        if(ag) ag.onclick=async()=>{
+          const name=($('#dtName').value.trim()||_company_slug(url)).toLowerCase().replace(/[^a-z0-9_]/g,'');
+          if(!name){ toast('Give it a short name first','bad'); return; }
+          ag.disabled=true; ag.textContent='Adding…';
+          try{ await jfetch('/api/sources/custom/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,label:$('#dtName').value.trim()||name,list_url:url,url_pattern:g.pattern,force:true})});
+            toast('Site added — included from the next scan'); renderTrinidad(); }
+          catch(e){ toast(e.message,'bad'); ag.disabled=false; ag.textContent='Add this site'; }
+        };
+      }
     }catch(e){ msg.textContent=e.message; }
   };
   const csBody=()=>({name:$('#csName').value.trim(), sitemap:$('#csSitemap').value.trim(), url_pattern:$('#csPattern').value.trim(), company:$('#csCompany').value.trim()});

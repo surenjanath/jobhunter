@@ -581,6 +581,38 @@ def test_trinidad(cfg: dict) -> None:
         rows = tt.fetch_custom_site({"name": "Acme TT", "sitemap": "https://acme.tt/sitemap.xml", "url_pattern": "/job/"}, 5)
         check("custom sitemap site works", len(rows) == 1 and rows[0]["source"] == "acmett")
 
+    # custom site by list_url, no schema.org JobPosting anywhere: "paste any careers page" fallback
+    list_page = """<html><body>
+      <nav><a href="/">Home</a><a href="/careers">Careers</a><a href="/about">About Us</a></nav>
+      <ul class="postings">
+        <li><a href="/careers/senior-accountant-123">Senior Accountant</a></li>
+        <li><a href="/careers/view-role-789">Read more</a></li>
+        <li><a href="/careers/apply">Apply Now</a></li>
+      </ul></body></html>"""
+    detail_pages = {
+        "senior-accountant-123": "<html><body><p>Plain prose about the role, no structured data.</p></body></html>",
+        "view-role-789": "<html><head><title>Marketing Coordinator - Acme Careers</title></head><body>x</body></html>",
+        "apply": "<html><head><title>Apply</title></head><body>Application form</body></html>",
+    }
+
+    def fake_list_fetch(u, p=None, **k):
+        if u.endswith("/careers"):
+            return list_page
+        return detail_pages.get(u.rsplit("/", 1)[-1], "")
+
+    with mock.patch.object(tt, "fetch", side_effect=fake_list_fetch):
+        rows = tt.fetch_custom_site({"name": "Acme TT", "list_url": "https://acme.tt/careers", "url_pattern": "/careers/[a-z0-9-]+"}, 10)
+        titles = sorted(r["title"] for r in rows)
+        check("list_url fallback: usable anchor text becomes the title", "Senior Accountant" in titles, titles)
+        check("list_url fallback: junk anchor text falls back to the detail page's own title", "Marketing Coordinator" in titles, titles)
+        check("list_url fallback: junk anchor text AND junk page title is dropped, not faked", len(rows) == 2, titles)
+        check("list_url fallback: company guessed from the domain when none is given", all(r["company"] == "Acme" for r in rows), [r["company"] for r in rows])
+
+    check("_looks_like_job_title rejects nav words and accepts real titles",
+         tt._looks_like_job_title("Careers") is False and tt._looks_like_job_title("Senior Data Engineer") is True)
+    check("_company_from_domain strips a careers. subdomain", tt._company_from_domain("https://careers.massygroup.tt/jobs/1") == "Massygroup")
+    check("_company_from_domain returns nothing for a bare IP host", tt._company_from_domain("http://127.0.0.1:8899/careers/") == "")
+
     # findworktt demo filtering
     demo = json.dumps({"jobs": [{"id": "1", "title": "[DEMO] role", "description": "DEMO DATA ONLY", "location": "San Juan"}]})
     with mock.patch.object(tt, "fetch", return_value=demo):

@@ -666,9 +666,72 @@ def fetch_digicel(limit: int = DEFAULT_LIMIT) -> list[dict]:
     return jobs[:limit]
 
 
+# ---------------------------------------------------------------------------
+# generic "paste any careers page" fallback — used by fetch_custom_site's list_url mode when a job's detail
+# page publishes no schema.org JobPosting data, so a title still gets through instead of the job being dropped.
+# ---------------------------------------------------------------------------
+
+GENERIC_JOB_PATTERN = r"(?:/(?:jobs?|careers?|vacanc(?:y|ies)|openings?|positions?|opportunit(?:y|ies))(?:/|$|[/?#-])|[?&](?:job|position)id=)"
+
+_A_TEXT_RE = re.compile(r'<a\b[^>]*\bhref="([^"#]+)"[^>]*>(.*?)</a>', re.I | re.S)
+_NAV_WORDS = {"home", "about", "about us", "contact", "contact us", "careers", "jobs", "all jobs", "view all jobs",
+             "apply now", "apply", "login", "log in", "sign in", "register", "sign up", "privacy policy", "privacy",
+             "terms", "terms of service", "faq", "blog", "news", "our team", "team", "learn more", "read more",
+             "view all", "see all", "see more", "search jobs", "search", "menu", "back to careers", "back",
+             "next", "previous", "current openings"}
+
+
+def _anchor_title(fragment: str) -> str:
+    """The first line of an anchor's cleaned inner text — nested tags (h3 + span for a location, say) become
+    separate lines, and the title is normally the first one."""
+    text = clean_text(fragment, 300)
+    return next((ln.strip() for ln in text.split("\n") if ln.strip()), "")
+
+
+def _looks_like_job_title(text: str) -> bool:
+    t = (text or "").strip().strip("»›→·-:").strip()
+    if not (4 <= len(t) <= 140):
+        return False
+    if t.lower() in _NAV_WORDS:
+        return False
+    return bool(re.search(r"[A-Za-z]{3,}", t))
+
+
+def _page_title_guess(page: str) -> str:
+    """A job title from the detail page itself, when the listing page's link text wasn't usable."""
+    m = re.search(r"<h1[^>]*>(.*?)</h1>", page, re.I | re.S)
+    if m:
+        t = clean_text(m.group(1), 200)
+        if _looks_like_job_title(t):
+            return t
+    m = re.search(r"<title[^>]*>(.*?)</title>", page, re.I | re.S)
+    if m:
+        t = re.split(r"\s*[|–—-]\s*", clean_text(m.group(1), 200))[0].strip()
+        if _looks_like_job_title(t):
+            return t
+    return ""
+
+
+def _meta_description(page: str) -> str:
+    m = (re.search(r'<meta[^>]+name=["\']description["\'][^>]+content="([^"]*)"', page, re.I)
+         or re.search(r'<meta[^>]+property=["\']og:description["\'][^>]+content="([^"]*)"', page, re.I))
+    return clean_text(m.group(1), 1000) if m else ""
+
+
+def _company_from_domain(url: str) -> str:
+    netloc = urlparse(url).netloc.lower()
+    host = re.sub(r"^(www\.|careers\.|jobs\.)", "", netloc.split(":")[0])  # drop a port, then a common subdomain
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", host) or host in ("localhost", ""):
+        return ""   # an IP or localhost is not a company name — build_job falls back to "Unknown"
+    base = host.split(".")[0]
+    return base.replace("-", " ").title() if len(base) > 1 else ""
+
+
 def fetch_custom_site(site: dict, limit: int = DEFAULT_LIMIT) -> list[dict]:
     """
-    Any T&T board/employer publishing schema.org JobPosting data. Profile entry:
+    Any T&T board/employer. Structured data (schema.org JobPosting) is used when a site publishes it, for full
+    quality (real posted/closing dates, salary, description); otherwise the listing page's own link text (or the
+    job page's <h1>/<title>) becomes the title — enough to add "any career page" even without structured data.
 
         trinidad_custom_sites:
           - name: republic          # becomes the job source
@@ -690,19 +753,37 @@ def fetch_custom_site(site: dict, limit: int = DEFAULT_LIMIT) -> list[dict]:
     if site.get("sitemap"):
         return _sitemap_ld_source(name, site["sitemap"], pattern, limit, fallback_company=fallback)
     if site.get("list_url"):
-        text = fetch(site["list_url"], required=True)
-        links = [urljoin(site["list_url"], h) for h in re.findall(r'href="([^"#]+)"', text)]
-        links = list(dict.fromkeys(u for u in links if re.search(pattern, u)))[: limit * 2]
-        if not links:
-            raise SourceError(f"{name}: no links matching {pattern!r} on {site['list_url']}")
+        list_url = site["list_url"]
+        text = fetch(list_url, required=True)
+        seen: set[str] = set()
+        candidates: list[tuple[str, str]] = []
+        for href, inner in _A_TEXT_RE.findall(text or ""):
+            if href.lower().startswith(("mailto:", "tel:", "javascript:")):
+                continue
+            url = urljoin(list_url, href)
+            if url in seen or url.split("#")[0] == list_url.split("#")[0] or not re.search(pattern, url):
+                continue
+            seen.add(url)
+            candidates.append((url, _anchor_title(inner)))
+        if not candidates:
+            raise SourceError(f"{name}: no links matching {pattern!r} on {list_url}")
+        candidates = candidates[: limit * 2]
 
-        def one(url):
+        def one(item: tuple[str, str]):
+            url, anchor_text = item
             page = fetch(url)
             ld = jobposting_ld(page) if page else None
-            return job_from_ld(ld, source=name, key=slug_from_url(url), url=url, fallback_company=fallback) if ld else None
+            if ld:
+                return job_from_ld(ld, source=name, key=slug_from_url(url), url=url, fallback_company=fallback)
+            title = anchor_text if _looks_like_job_title(anchor_text) else (_page_title_guess(page) if page else "")
+            if not title:
+                return None
+            return build_job(source=name, key=slug_from_url(url), title=title,
+                             company=fallback or _company_from_domain(url), url=url,
+                             description=_meta_description(page) if page else "")
 
-        jobs = _pmap(one, links)
-        _check_layout(name, len(links), jobs)
+        jobs = _pmap(one, candidates)
+        _check_layout(name, len(candidates), jobs)
         return jobs[:limit]
     raise SourceError(f"{name}: needs 'sitemap' or 'list_url'")
 
