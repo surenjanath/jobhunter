@@ -1,4 +1,4 @@
-.PHONY: help run test test-scanner test-web scan rescore lint live digest
+.PHONY: help run test test-scanner test-web scan scan-cron rescore lint live digest
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' Makefile | sed 's/:.*##/\t/'
@@ -16,6 +16,9 @@ test-web:        ## Django app tests (temporary database)
 
 scan:            ## fetch, score and store jobs (no Google Sheets write)
 	cd jobhunt && python -m src.run --dry-run
+
+scan-cron:       ## same scan, via the lock-guarded script meant for cron/launchd (see docs/SCHEDULING.md)
+	./scripts/scan-cron.sh
 
 rescore:         ## re-score stored jobs with the current resume and preferences (no network)
 	cd jobhunt && python -m src.run --rescore

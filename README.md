@@ -149,6 +149,9 @@ make digest       # what's new and worth your time
 make test         # all tests (offline)
 ```
 
+Want scans to run on their own instead of clicking Scan in the UI? See [Scheduling scans](docs/SCHEDULING.md) —
+`scripts/scan-cron.sh` plus a cron line or a macOS launchd example, lock-guarded so a slow run never overlaps itself.
+
 ## Pages
 
 | URL | What it is |
@@ -170,6 +173,7 @@ Each page is its own Django template (`templates/pages/`) with its own script (`
 - [Configuration](docs/CONFIGURATION.md): `profile.yaml`, preferences, environment variables, AI providers
 - [Job sources](docs/SOURCES.md): what is covered, how to add a site or an employer
 - [API](docs/API.md): the JSON endpoints behind the UI
+- [Scheduling scans](docs/SCHEDULING.md): cron / launchd, instead of clicking Scan in the UI
 - [Contributing](CONTRIBUTING.md)
 
 ## Testing

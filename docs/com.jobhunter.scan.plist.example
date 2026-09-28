@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Scheduled scan for JobHunter, via macOS launchd. See docs/SCHEDULING.md.
+
+     Install:
+       cp docs/com.jobhunter.scan.plist.example ~/Library/LaunchAgents/com.jobhunter.scan.plist
+       # then edit the two /full/path/to/JobHunter placeholders below to your actual clone path
+       launchctl load ~/Library/LaunchAgents/com.jobhunter.scan.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jobhunter.scan</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/full/path/to/JobHunter/scripts/scan-cron.sh</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>1800</integer>  <!-- seconds; 1800 = 30 minutes -->
+
+    <key>StandardOutPath</key>
+    <string>/full/path/to/JobHunter/jobhunt/output/scan-cron.log</string>
+    <key>StandardErrorPath</key>
+    <string>/full/path/to/JobHunter/jobhunt/output/scan-cron.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
