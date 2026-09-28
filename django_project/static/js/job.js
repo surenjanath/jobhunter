@@ -1,10 +1,19 @@
 // job.js — the job dialog (Match / Overview / Tech / … tabs) and cover-letter drafting. Used by every page that lists jobs.
 async function toggleStar(jid,el){ try{ const r=await jfetch(`/api/jobs/${encodeURIComponent(jid)}/star/`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); const j=JOBS.find(x=>x.job_id===jid); if(j) j.starred=r.starred; if(el){ el.classList.toggle('on',r.starred); el.textContent=r.starred?'★':'☆'; } }catch(e){ toast(e.message,'bad'); } }
 let CURRENT_JOB=null, CURRENT_TAB='overview';
-document.querySelectorAll('#jobTabs .tab').forEach(el=>el.onclick=()=>{document.querySelectorAll('#jobTabs .tab').forEach(x=>x.classList.remove('active')); el.classList.add('active'); CURRENT_TAB=el.dataset.tab; if(CURRENT_JOB) renderJobTab(CURRENT_JOB);});
+const AI_TABS=['summary','aimatch','tailor','rewrite','practice','outreach'];
+// Tabs live in two rows: the main row, and (for ✦ AI) a second row of tools. setTab keeps both in sync and renders.
+function syncTabs(){
+  const inAi=AI_TABS.includes(CURRENT_TAB);
+  document.querySelectorAll('#jobTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.group==='ai'?inAi:x.dataset.tab===CURRENT_TAB));
+  document.querySelectorAll('#jobSubTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===CURRENT_TAB));
+  $('#jobSubTabs').hidden=!inAi;
+}
+function setTab(t){ CURRENT_TAB=t; syncTabs(); if(CURRENT_JOB) renderJobTab(CURRENT_JOB); }
+document.querySelectorAll('#jobTabs .tab, #jobSubTabs .tab').forEach(el=>el.onclick=()=>setTab(el.dataset.tab));
 async function openJob(jobId){
   const j=JOBS.find(x=>x.job_id===jobId); if(!j) return;
-  $('#jobTitle').textContent=j.title; $('#jobSub').textContent=`${j.company} · ${j.location||'—'} · ${j.source}`; $('#jobApply').href=j.url||'#'; $('#jobNote').textContent=`Fit ${j.fit_score} · ${j.tier} · ${j.posted_at||'—'}`; $('#jobBody').innerHTML='<span class="co">Analyzing…</span>'; jobDlg.showModal(); CURRENT_JOB=j; CURRENT_TAB='match'; document.querySelectorAll('#jobTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.tab==='match'));
+  $('#jobTitle').textContent=j.title; $('#jobSub').textContent=`${j.company} · ${j.location||'—'} · ${j.source}`; $('#jobApply').href=j.url||'#'; $('#jobNote').textContent=`Fit ${j.fit_score} · ${j.tier} · ${j.posted_at||'—'}`; $('#jobBody').innerHTML='<span class="co">Analyzing…</span>'; jobDlg.showModal(); CURRENT_JOB=j; CURRENT_TAB='match'; syncTabs();
   try{const d=await jfetch(`/api/jobs/${encodeURIComponent(jobId)}/`); if(d.error) throw new Error(d.error); CURRENT_JOB={...j, ...d.job, details:d.details, likelihood:d.likelihood}; Object.assign(j, CURRENT_JOB); renderJobTab(CURRENT_JOB);}catch(e){$('#jobBody').innerHTML=`<div class="banner w">${esc(e.message)}</div><pre class="co">${esc(j.description||'').slice(0,3000)}</pre>`;}
 }
 function renderJobTab(j){
@@ -89,7 +98,7 @@ function renderJobTab(j){
       $('#jobBody').innerHTML=html;
     }).catch(e=>{ $('#jobBody').innerHTML=`<div class="banner w">${esc(e.message)}</div>`;});
     return;
-  } else if(CURRENT_TAB==='ai'){
+  } else if(CURRENT_TAB==='aimatch'){
     html='<span class="co">Scoring AI match…</span>';
     $('#jobBody').innerHTML=html;
     jfetch(`/api/jobs/${encodeURIComponent(j.job_id)}/ai-match/`).then(d=>{

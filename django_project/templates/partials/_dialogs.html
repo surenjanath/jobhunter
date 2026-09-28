@@ -30,19 +30,22 @@
   <div class="dh"><div><h3 id="jobTitle">Job</h3><div class="quiet" id="jobSub"></div></div><button type="button" onclick="jobDlg.close()">Close</button></div>
   <div class="tabs" id="jobTabs">
     <button type="button" class="tab active" data-tab="match">Match</button>
-    <button type="button" class="tab" data-tab="summary">✦ Summary</button>
     <button type="button" class="tab" data-tab="overview">Overview</button>
     <button type="button" class="tab" data-tab="tech">Tech</button>
     <button type="button" class="tab" data-tab="needs">Needs</button>
-        <button type="button" class="tab" data-tab="ats">ATS</button>
+    <button type="button" class="tab" data-tab="ats">ATS</button>
     <button type="button" class="tab" data-tab="interview">Interview</button>
     <button type="button" class="tab" data-tab="salary">Salary</button>
-    <button type="button" class="tab" data-tab="ai">AI match</button>
-    <button type="button" class="tab" data-tab="tailor">Tailor</button>
-    <button type="button" class="tab" data-tab="rewrite">✦ Rewrite</button>
-    <button type="button" class="tab" data-tab="practice">✦ Practice</button>
-    <button type="button" class="tab" data-tab="outreach">✦ Outreach</button>
+    <button type="button" class="tab" data-tab="summary" data-group="ai">✦ AI</button>
     <button type="button" class="tab" data-tab="raw">Posting</button>
+  </div>
+  <div class="subtabs" id="jobSubTabs" hidden>
+    <button type="button" class="tab" data-tab="summary">Summary &amp; red flags</button>
+    <button type="button" class="tab" data-tab="aimatch">Resume match</button>
+    <button type="button" class="tab" data-tab="tailor">Tailor</button>
+    <button type="button" class="tab" data-tab="rewrite">Rewrite bullets</button>
+    <button type="button" class="tab" data-tab="practice">Practice answer</button>
+    <button type="button" class="tab" data-tab="outreach">Outreach</button>
   </div>
   <div id="jobBody" class="tab-body">Loading</div>
   <div class="df">

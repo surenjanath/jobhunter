@@ -370,3 +370,7 @@ mark.hl.have{background:rgba(127,127,120,.18)}
 #recsBox li{padding:6px 0;border-bottom:1px solid var(--rule)}
 .subnav{display:flex;gap:18px;flex-wrap:wrap;margin:0 0 18px;font-size:13px;position:sticky;top:0;background:var(--canvas);padding:8px 0;z-index:2;border-bottom:1px solid var(--rule)}
 .subnav a{color:var(--mute);text-decoration:none}.subnav a:hover{color:var(--ink)}
+.subtabs{display:flex;gap:16px;padding:0 18px;border-bottom:1px solid var(--rule);overflow:auto;font-size:13px}
+.subtabs[hidden]{display:none}
+.subtabs .tab{padding:8px 0;color:var(--mute)}
+.subtabs .tab.active{color:var(--ink);border-bottom-color:var(--ink)}
