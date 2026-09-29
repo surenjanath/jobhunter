@@ -61,7 +61,7 @@ def _corpus(limit: int = 1500) -> list[dict]:
 
 @api_view(["GET"])
 def status(request):
-    return Response(_feat().llm_status())
+    return Response(_feat().llm_status(_cfg()))
 
 
 def _with_job(fn):
@@ -98,9 +98,75 @@ def outreach(request, job, d):
 @_with_job
 def interview_feedback(request, job, d):
     voice = request.data.get("voice") if isinstance(request.data.get("voice"), dict) else None
+    persona = str(request.data.get("persona") or "neutral")
     out = _feat().interview_feedback(d, str(request.data.get("question") or ""), str(request.data.get("answer") or ""),
-                                     use_llm=_want_ai(request), cfg=_cfg(), voice=voice)
+                                     use_llm=_want_ai(request), cfg=_cfg(), voice=voice,
+                                     persona=persona if persona in _feat().PERSONAS else "neutral")
     return Response(out, status=400 if out.get("error") else 200)
+
+
+@api_view(["POST"])
+@_with_job
+def interview_questions(request, job, d):
+    """{n, persona, ai} -> questions for the mock interview: written by the model when ai is on, else the rule-built set."""
+    try:
+        n = max(1, min(12, int(request.data.get("n") or 5)))
+    except (TypeError, ValueError):
+        n = 5
+    persona = str(request.data.get("persona") or "neutral")
+    if not _want_ai(request):
+        from src import interview as _iv
+        return Response({"questions": (_iv.questions(d).get("questions") or [])[:n], "provider": "rules"})
+    return Response(_feat().ai_questions(d, n=n, persona=persona if persona in _feat().PERSONAS else "neutral", cfg=_cfg()))
+
+
+@api_view(["POST"])
+def interview_summary(request):
+    """{results, ai?, save?, job?: {job_id, title, company}} -> the wrap-up. save=true also stores the session
+    (the signed-in account's, or the shared guest history) so the Interview page can show progress over time."""
+    results = request.data.get("results")
+    results = [r for r in results if isinstance(r, dict)][:30] if isinstance(results, list) else []
+    out = _feat().session_summary(results, use_llm=_want_ai(request), cfg=_cfg())
+    if out.get("error"):
+        return Response(out, status=400)
+    if str(request.data.get("save")).lower() in ("1", "true"):
+        from accounts.models import InterviewSession
+        job = request.data.get("job") if isinstance(request.data.get("job"), dict) else {}
+        for r in results:                               # keep stored rows bounded: an answer is a minute or two of speech
+            if isinstance(r.get("answer"), str):
+                r["answer"] = r["answer"][:5000]
+        s = InterviewSession.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            job_id=str(job.get("job_id") or "")[:255], job_title=str(job.get("title") or "")[:300], company=str(job.get("company") or "")[:300],
+            overall=out["overall_avg"], content=out["content_avg"], delivery=out["delivery_avg"], n=out["n"], summary=out, results=results)
+        out["session_id"] = s.id
+    return Response(out)
+
+
+def _sessions(request):
+    from accounts.models import InterviewSession
+    qs = InterviewSession.objects.all()
+    return qs.filter(user=request.user) if request.user.is_authenticated else qs.filter(user__isnull=True)
+
+
+@api_view(["GET"])
+def interview_sessions(request):
+    rows = [{"id": s.id, "job_id": s.job_id, "job_title": s.job_title, "company": s.company, "overall": s.overall, "content": s.content,
+             "delivery": s.delivery, "composure": (s.summary or {}).get("composure_avg"), "n": s.n, "created_at": s.created_at}
+            for s in _sessions(request)[:50]]
+    return Response({"sessions": rows})
+
+
+@api_view(["GET", "DELETE"])
+def interview_session(request, sid):
+    s = _sessions(request).filter(id=sid).first()
+    if not s:
+        return Response({"error": "not found"}, status=404)
+    if request.method == "DELETE":
+        s.delete()
+        return Response({"ok": True})
+    return Response({"id": s.id, "job": {"job_id": s.job_id, "title": s.job_title, "company": s.company},
+                     "summary": s.summary, "results": s.results, "created_at": s.created_at})
 
 
 @api_view(["GET"])

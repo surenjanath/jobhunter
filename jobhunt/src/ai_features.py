@@ -40,15 +40,24 @@ BUZZ = ("team player", "hard-working", "hardworking", "results-driven", "go-gett
 # LLM plumbing
 # ---------------------------------------------------------------------------
 
-def llm_status() -> dict:
-    """Which providers exist and what would leave your machine if you use them."""
+def llm_status(cfg: dict | None = None) -> dict:
+    """Which providers exist, which one a request would ACTUALLY use (the pinned provider, else the first available
+    in llm.ORDER — the same choice llm.generate() makes), and what would leave your machine if you use it."""
     try:
         from src import llm
         d = llm.describe()
+        order = list(llm.ORDER)
     except Exception:  # noqa: BLE001
-        d = {}
+        d, order = {}, []
     avail = {k: bool(v.get("available")) for k, v in d.items() if k != "template"}
-    return {"providers": avail, "any": any(avail.values()),
+    pinned = ((cfg or {}).get("provider") or "auto").strip().lower()
+    if pinned in avail:
+        active = pinned if avail[pinned] else None
+    elif pinned in ("template", "none"):
+        active = None
+    else:
+        active = next((k for k in order if avail.get(k)), None)
+    return {"providers": avail, "any": active is not None, "active": active,
             "privacy": {"ollama": "stays on this machine", "claude_code": "sent to Anthropic via the Claude Code CLI",
                         "anthropic": "sent to the Anthropic API"}}
 
@@ -68,10 +77,13 @@ def _json_from(text: str | None):
     m = re.search(r"(\{.*\}|\[.*\])", text, re.S)
     if not m:
         return None
-    try:
-        return json.loads(m.group(1))
-    except ValueError:
-        return None
+    raw = m.group(1)
+    for attempt in (raw, re.sub(r",\s*([}\]])", r"\1", raw)):   # small local models often leave trailing commas
+        try:
+            return json.loads(attempt)
+        except ValueError:
+            continue
+    return None
 
 
 def _nums(s: str) -> set[str]:
@@ -288,6 +300,9 @@ def delivery_feedback(voice: dict | None) -> dict | None:
             scores.append(95)
 
     mean_p, sd_p = voice.get("pitch_mean_hz"), voice.get("pitch_stdev_hz")
+    # a wavering voice also has a big pitch spread; that's a composure cue (composure_feedback), never "lively" tone
+    if (voice.get("jitter") or 0) > 0.045:
+        mean_p = None
     if mean_p and sd_p is not None:
         cv = sd_p / mean_p if mean_p else 0
         if cv < 0.06:
@@ -324,7 +339,87 @@ def delivery_feedback(voice: dict | None) -> dict | None:
            "metrics": {k: voice.get(k) for k in ("pace_wpm", "pitch_mean_hz", "pitch_stdev_hz", "pause_ratio", "long_pauses", "volume_mean") if voice.get(k) is not None}}
 
 
-def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = False, cfg: dict | None = None, voice: dict | None = None) -> dict:
+# ---------------------------------------------------------------------------
+# composure — does this person SOUND nervous? Read from vocal cues the browser measures (startMetrics, static/js/ai.js):
+# a wavering voice (frame-to-frame pitch instability), pitch that starts high and settles, statements rising at the end like
+# questions (uptalk), trailing off, a long wait before the first word, rushing, a narrow pitch range, and filler words
+# (from the transcript). Each cue is a well-known correlate of speaking anxiety, none is proof on its own — so the
+# read is stated plainly, with the evidence next to it, and never as a diagnosis. Thresholds err on the side of
+# silence: a cue only counts when it's clearly past what calm conversational speech produces.
+# ---------------------------------------------------------------------------
+
+_COMPOSURE_CUES = [
+    # key, test(voice) -> bool, weight, what a listener hears, the fix
+    ("jitter", lambda v: (v.get("jitter") or 0) > 0.045, 16, "your pitch wavered from moment to moment (a shaky voice)",
+     "Slow your breathing before you start: a full breath out steadies the voice more than anything else."),
+    ("drift", lambda v: (v.get("pitch_drift_st") or 0) > 1.5, 12, "your pitch started noticeably higher than it ended, a classic sign of nerves in the opening",
+     "Rehearse your first two sentences until they're automatic, so the opening doesn't carry the adrenaline."),
+    ("uptalk", lambda v: (v.get("uptalk_ratio") or 0) > 0.4 and (v.get("phrases") or 0) >= 3, 12, "many statements rose at the end like questions, which sounds unsure",
+     "Land your statements: let the pitch fall at the end of each sentence, especially the result."),
+    ("trail", lambda v: (v.get("trail_off_ratio") or 0) > 0.4 and (v.get("phrases") or 0) >= 3, 10, "you often trailed off at the end of sentences",
+     "Finish each sentence at full volume; the last words are usually the important ones."),
+    ("latency", lambda v: (v.get("start_latency_sec") or 0) > 4, 8, "you took a long time to start",
+     "It's fine to buy a second (\"Good question — let me think of the best example\"), then begin."),
+    ("rush", lambda v: (v.get("pace_wpm") or 0) > 180, 12, "you were rushing",
+     "Deliberately slow down; pausing after a key point reads as confidence."),
+    ("narrow", lambda v: v.get("pitch_range_st") is not None and v["pitch_range_st"] < 2.0, 8, "your pitch range was very narrow, which reads as tense or held back",
+     "Let your voice move: stress the words that matter (the action, the number)."),
+]
+
+
+def composure_feedback(voice: dict | None, filler_per_100: float = 0.0) -> dict | None:
+    if not voice or not voice.get("duration_sec") or (voice.get("duration_sec") or 0) < 5:
+        return None
+    signals, fixes, penalty = [], [], 0
+    for key, test, w, heard, fix in _COMPOSURE_CUES:
+        try:
+            hit = test(voice)
+        except (TypeError, ValueError):
+            hit = False
+        if hit:
+            signals.append({"cue": key, "heard": heard})
+            fixes.append(fix)
+            penalty += w
+    if filler_per_100 > 5:
+        signals.append({"cue": "filler", "heard": f"lots of filler words ({filler_per_100:g} per 100 words)"})
+        fixes.append("Replace filler with a silent pause; it sounds more composed than \"um\" or \"basically\".")
+        penalty += 10
+    score = max(0, 100 - penalty)
+    label = "Calm and confident" if score >= 80 else "Some nerves showing" if score >= 60 else "Noticeably nervous"
+    heard = [x["heard"] for x in signals]
+    if not heard:
+        honest = "You sounded composed: steady voice, statements landed, no rushing."
+    elif score >= 80:
+        honest = f"Mostly composed. One thing a listener might pick up: {heard[0]}."
+    else:
+        honest = (f"Honestly, you sounded {'quite ' if score < 60 else 'a bit '}nervous: " + "; ".join(heard[:3])
+                  + (". An interviewer would likely notice." if score < 60 else ". Most interviewers make allowances for this, but it's worth fixing."))
+    return {"score": score, "label": label, "signals": signals, "honest": honest, "fixes": fixes[:3],
+            "caveat": "Estimated from vocal cues (pitch, volume, timing), not a diagnosis. A cold, a noisy room or a naturally fast talker can trip these."}
+
+
+def honest_take(score: int, star: dict, has_nums: bool, n_words: int, composure: dict | None) -> str:
+    """One blunt sentence: would this answer get you through? Content decides; composure can pull it down a notch."""
+    missing = [k for k in ("situation", "action", "result") if not star.get(k)]
+    if score >= 80 and (not composure or composure["score"] >= 60):
+        return "Honest take: this answer would hold up in a real interview."
+    if score >= 60:
+        gap = ("it has no number to prove the result" if not has_nums else f"it's missing the {missing[0]}" if missing else "it could be tighter")
+        return f"Honest take: acceptable but forgettable, {gap}. Against strong candidates it probably wouldn't stand out."
+    if n_words < 50:
+        return "Honest take: too thin. An interviewer would have to drag the story out of you, and most won't."
+    return f"Honest take: this wouldn't get you through yet. It's missing the {', '.join(missing) or 'concrete detail'}, so it's hard to tell what you actually did."
+
+
+PERSONAS = {
+    "friendly": "a warm, encouraging interviewer who still wants specifics",
+    "neutral": "a professional, neutral interviewer",
+    "tough": "a demanding senior interviewer who probes vague claims and pushes for evidence and numbers",
+}
+
+
+def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = False, cfg: dict | None = None, voice: dict | None = None,
+                       persona: str = "neutral") -> dict:
     answer = (answer or "").strip()
     if len(answer.split()) < 8:
         return {"error": "write at least a couple of sentences to get feedback"}
@@ -364,19 +459,125 @@ def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = Fa
         if missing_terms:
             tips.append("You could name the skills the posting cares about that you actually used: " + ", ".join(missing_terms) + ".")
     delivery = delivery_feedback(voice)
+    composure = composure_feedback(voice, round(len(filler) / len(words) * 100, 1) if words else 0)
+    if delivery and composure:
+        delivery["score"] = round(delivery["score"] * 0.6 + composure["score"] * 0.4)
     overall = round(score * 0.7 + delivery["score"] * 0.3) if delivery else score
     verdict = "Strong" if overall >= 75 else "Solid, tighten it" if overall >= 55 else "Needs structure"
     out = {"score": score, "overall_score": overall, "star": star, "words": len(words), "numbers": has_nums, "skills_named": skills[:8], "tips": tips[:6],
-           "verdict": verdict, "provider": "rules", "delivery": delivery}
+           "verdict": verdict, "provider": "rules", "delivery": delivery,
+           "filler": dict(Counter(f.lower() for f in filler).most_common(6)), "filler_count": len(filler),
+           "follow_up": follow_up_question(star, has_nums, first_i, first_we, len(words)), "follow_up_by": "rules",
+           "composure": composure, "honest": honest_take(score, star, has_nums, len(words), composure)}
+    if persona == "tough" and not out["follow_up"] and overall < 80:
+        out["follow_up"] = "Let me push on that. What would you do differently if you did it again, and why?"
     if use_llm:
-        text, backend = _ask_llm("You are an interview coach. Give three short, specific improvements to this answer. Do not invent facts. Plain words.",
-                                 f"Question: {question}\nAnswer: {answer}", cfg)
-        if text:
-            out.update(coach=text.strip(), provider=backend)
+        out.update(_llm_answer_review(job, question, answer, out, persona, cfg))
     # what a voice interviewer would say back — plain text; actual speech synthesis (optional, needs Kokoro) is src.voice.synthesize()
     speak_tip = re.sub(r"^[A-Za-z ,]+: ", "", tips[0]) if tips else (delivery["tips"][0] if delivery and delivery["tips"] else "")
-    out["speech"] = f"You scored {overall} out of 100. {verdict}." + (f" The main thing to work on: {speak_tip}" if speak_tip else " Nicely done.")
+    take = out["honest"].replace("Honest take: ", "")
+    out["speech"] = (f"You scored {overall} out of 100. {take[:1].upper() + take[1:]}"
+                     + (f" {composure['honest']}" if composure and composure["score"] < 80 else "")
+                     + (f" The main thing to work on: {speak_tip}" if speak_tip else ""))
     return out
+
+
+def _llm_answer_review(job: dict, question: str, answer: str, rules: dict, persona: str, cfg: dict | None) -> dict:
+    """One model call per answer: coach notes, a follow-up that reacts to what was actually said, and a stronger
+    version of the answer. The stronger version may only reword the candidate's own facts (grounded(): no new numbers
+    or tools); if the model invents any, it is dropped rather than shown."""
+    comp = rules.get("composure") or {}
+    system = ("You are " + PERSONAS.get(persona, PERSONAS["neutral"]) + " and an honest interview coach. Reply with JSON only: "
+              '{"coach": ["three short, specific, candid improvements"], "follow_up": "one probing follow-up question that reacts to '
+              'something specific the candidate said, or empty string if the answer fully covered it", "stronger": "the same answer '
+              'rewritten to be clearer and better structured (situation, action, result), in first person, using ONLY facts, numbers, '
+              'tools, job titles and claims the candidate actually said in the answer — never add new ones, never take them from the '
+              'question, and never upgrade their role (e.g. \\"helped\\" must not become \\"led\\" or \\"owned\\")"}. Be honest, not flattering.')
+    user = (f"Role: {job.get('title','')} at {job.get('company','')}\nQuestion: {question}\nAnswer: {answer}\n"
+            f"Rule-based read: content {rules['score']}/100; missing: {', '.join(k for k, v in rules['star'].items() if not v) or 'nothing'}"
+            + (f"; voice: {comp.get('label')} ({'; '.join(x['heard'] for x in comp.get('signals', []))})" if comp else ""))
+    text, backend = _ask_llm(system, user, cfg)
+    data = _json_from(text)
+    if not isinstance(data, dict):
+        # prose is still useful coaching; broken JSON is not something to show a person
+        return {"coach": text.strip(), "provider": backend} if text and not text.lstrip().startswith(("{", "[")) else {}
+    out: dict = {"provider": backend}
+    coach = data.get("coach")
+    if isinstance(coach, list):
+        coach = "\n".join(f"• {c}" for c in coach if isinstance(c, str) and c.strip())
+    if isinstance(coach, str) and coach.strip():
+        out["coach"] = coach.strip()
+    fu = data.get("follow_up")
+    if isinstance(fu, str) and len(fu.strip()) > 10:
+        out.update(follow_up=fu.strip(), follow_up_by=backend)
+    elif isinstance(fu, str) and not fu.strip():
+        out.update(follow_up=None, follow_up_by=backend)
+    st = data.get("stronger")
+    if isinstance(st, str) and len(st.split()) >= 15:
+        if grounded(answer, st) and _no_new_claims(answer, st):
+            out["stronger"] = st.strip()
+        else:
+            out["stronger_dropped"] = "The model's rewrite added facts you didn't say, so it isn't shown."
+    return out
+
+
+_CLAIM_UPGRADES = ("led", "owned", "managed", "architected", "spearheaded", "headed", "directed", "founded")
+_COMMON_CAPS = {"i", "a", "an", "the", "my", "when", "at", "as", "in", "on", "we", "our", "it", "this", "that", "after", "before", "because",
+                "so", "then", "while", "during", "by", "to", "for", "with", "and", "but", "once", "since", "over", "through", "using"}
+
+
+def _no_new_claims(original: str, rewritten: str) -> bool:
+    """grounded() covers numbers and tools; this covers what a model most often slips in besides: proper nouns and
+    titles (capitalised words mid-sentence, e.g. a job title lifted from the question) and upgraded ownership verbs."""
+    low = original.lower()
+    for m in re.finditer(r"(?<![.!?]\s)(?<!^)\b([A-Z][a-zA-Z]+)", rewritten):
+        w = m.group(1)
+        if w.lower() not in _COMMON_CAPS and w.lower() not in low:
+            return False
+    return not any(re.search(rf"\b{v}\b", rewritten, re.I) and not re.search(rf"\b{v}\b", original, re.I) for v in _CLAIM_UPGRADES)
+
+
+def ai_questions(job: dict, n: int = 5, persona: str = "neutral", cfg: dict | None = None) -> dict:
+    """Questions written by the model for THIS posting and resume. Falls back to the rule-built set on any failure."""
+    from src import interview as _iv
+    base = _iv.questions(job).get("questions") or []
+    ctx = _ctx()
+    prof = (ctx or {}).get("profile") or {}
+    resume = f"Titles: {', '.join(prof.get('titles') or [])[:200]}. Skills: {', '.join(list(prof.get('skills') or [])[:25])}. Summary: {(prof.get('summary') or '')[:400]}"
+    system = ("You are " + PERSONAS.get(persona, PERSONAS["neutral"]) + ". Write realistic interview questions for this exact role and "
+              f"candidate: a mix of behavioural (tell me about a time), role-specific technical/judgement, and one on a gap between the "
+              f"posting and the resume. They will be READ ALOUD, so each is one question, at most two short sentences (under 35 words), "
+              f'no lists, no multi-part questions. Reply with JSON only: {{"questions": [{{"q": "...", "why": "what it tests"}}]}} with exactly {n} items.')
+    user = f"Role: {job.get('title','')} at {job.get('company','')}\nPosting:\n{(job.get('description') or '')[:3500]}\n\nCandidate: {resume}"
+    text, backend = _ask_llm(system, user, cfg)
+    data = _json_from(text)
+    items = data.get("questions") if isinstance(data, dict) else data if isinstance(data, list) else None
+    qs = [{"q": str(x["q"]).strip(), "why": str(x.get("why") or "").strip(), "by": backend}
+          for x in (items or []) if isinstance(x, dict) and isinstance(x.get("q"), str) and 12 < len(x["q"].strip())
+          and len(x["q"].split()) <= 60][:n]   # a paragraph-long question is unanswerable out loud; drop, don't truncate
+    if len(qs) < max(2, n // 2):
+        return {"questions": base[:n], "provider": "rules", "note": "The model didn't return usable questions, so these are the built-in ones."}
+    # always open with the classic opener if the model didn't
+    if not re.search(r"background|about yourself|walk me through", qs[0]["q"], re.I) and base:
+        qs = [base[0]] + qs[: n - 1]
+    return {"questions": qs, "provider": backend}
+
+
+# ---------------------------------------------------------------------------
+# follow-up — what a real interviewer would probe after a thin answer. Rules only, picked from what the answer
+# is actually missing (checked in priority order), so the probe is always about THIS answer. None = no probe needed.
+# ---------------------------------------------------------------------------
+
+def follow_up_question(star: dict, has_nums: bool, first_i: int, first_we: int, n_words: int) -> str | None:
+    if n_words < 45 and not star.get("situation"):
+        return "Can you walk me through a specific example of that? Where were you, and what was going on?"
+    if first_we > first_i * 2 and first_we >= 3:
+        return "You mentioned what the team did. What was your own part in it, specifically?"
+    if not star.get("action"):
+        return "What did you personally do? Walk me through the steps you took."
+    if not star.get("result") or not has_nums:
+        return "How did it turn out? Is there a number you can put on the result?"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -400,19 +601,45 @@ def session_summary(results: list[dict], use_llm: bool = False, cfg: dict | None
     tips.update(t for r in scored for t in (r.get("delivery") or {}).get("tips", []))
     recurring = [t for t, c in tips.most_common(8) if c >= 2 or n <= 2][:5]
     verdict = "Strong" if overall_avg >= 75 else "Solid, some rough edges" if overall_avg >= 55 else "Needs more prep"
-    out = {"n": n, "content_avg": content_avg, "overall_avg": overall_avg, "delivery_avg": delivery_avg, "verdict": verdict,
+    comp = [r["composure"]["score"] for r in scored if r.get("composure")]
+    composure_avg = round(sum(comp) / len(comp)) if comp else None
+    nerves = None
+    if len(comp) >= 2:
+        first, last = comp[0], comp[-1]
+        nerves = ("You settled in: you sounded noticeably calmer by the end than at the start." if last - first >= 12 else
+                  "You got more tense as the interview went on, which usually means fatigue or a question that rattled you." if first - last >= 12 else
+                  "Your composure was consistent from start to finish.")
+    cues = Counter(sig["heard"] for r in scored for sig in ((r.get("composure") or {}).get("signals") or []))
+    readiness = ("Ready: you'd likely advance with answers like these." if overall_avg >= 78 and (composure_avg is None or composure_avg >= 60) else
+                 "Borderline: you'd advance with some interviewers and not others." if overall_avg >= 60 else
+                 "Not ready yet: in a real interview these answers would most likely not get you to the next round.")
+    filler_total = sum(r.get("filler_count") or 0 for r in scored)
+    words_total = sum(r.get("words") or 0 for r in scored)
+    fillers = Counter()
+    for r in scored:
+        fillers.update(r.get("filler") or {})
+    out = {"n": n, "content_avg": content_avg, "filler_total": filler_total,
+           "filler_per_100": round(filler_total / words_total * 100, 1) if words_total else 0,
+           "top_fillers": [w for w, _ in fillers.most_common(4)], "overall_avg": overall_avg, "delivery_avg": delivery_avg, "verdict": verdict,
            "best": {"question": best.get("question", ""), "score": best["overall_score"]},
            "worst": {"question": worst.get("question", ""), "score": worst["overall_score"]},
-           "recurring_tips": recurring, "provider": "rules"}
+           "recurring_tips": recurring, "provider": "rules", "composure_avg": composure_avg,
+           "composure_trend": comp, "nerves": nerves, "nerve_cues": [c for c, _ in cues.most_common(3)], "readiness": readiness}
     if use_llm:
-        lines = "\n".join(f"- Q: {r.get('question','')}\n  Score: {r['overall_score']}/100. Tips: {'; '.join(r.get('tips') or []) or 'none'}" for r in scored)
+        lines = "\n".join(f"- Q: {r.get('question','')}\n  Content {r['score']}/100, overall {r['overall_score']}/100. "
+                          f"Voice: {(r.get('composure') or {}).get('label') or 'not measured'}"
+                          f"{' (' + '; '.join(x['heard'] for x in (r.get('composure') or {}).get('signals', [])) + ')' if (r.get('composure') or {}).get('signals') else ''}. "
+                          f"Tips: {'; '.join(r.get('tips') or []) or 'none'}" for r in scored)
         text, backend = _ask_llm(
-            "You coach candidates after a mock interview. In 3-4 sentences: an honest, encouraging overall read, and the ONE thing to "
-            "focus on before the real interview. Use only what's given below — never invent an example or a fact not present in it.",
-            lines, cfg)
+            "You are a candid interview coach debriefing after a mock interview. In 4-5 sentences: would this candidate advance, "
+            "honestly (don't flatter); how they came across, including whether they sounded nervous; and the ONE thing to fix first. "
+            "Use only what's given below — never invent an example or a fact not present in it.",
+            lines + f"\nSession: overall {overall_avg}/100, composure {composure_avg if composure_avg is not None else 'not measured'}. "
+            f"The rule-based verdict is \"{readiness}\" — if you disagree, say so explicitly and why.", cfg)
         if text:
             out.update(coach=text.strip(), provider=backend)
-    out["speech"] = (f"Overall, you scored {overall_avg} out of 100 across {n} question{'s' if n != 1 else ''}. {verdict}."
+    out["speech"] = (f"Overall, you scored {overall_avg} out of 100 across {n} question{'s' if n != 1 else ''}. {readiness}"
+                     + (f" On nerves: {nerves}" if nerves else "")
                      + (f" Keep working on: {re.sub(r'^[A-Za-z ,:]+: ', '', recurring[0])}" if recurring else ""))
     return out
 

@@ -21,6 +21,7 @@ ledger = _page("pages/ledger.html", "jobs", "Ledger")
 pipeline = _page("pages/pipeline.html", "pipeline", "Pipeline")
 analytics_page = _page("pages/analytics.html", "analytics", "Analytics")
 profile_page = _page("pages/profile.html", "profile", "Profile")
+interview_page = _page("pages/interview.html", "interview", "Interview")
 trinidad_page = _page("pages/trinidad.html", "trinidad", "Trinidad")
 settings_page = _page("pages/settings.html", "settings", "Settings")
 

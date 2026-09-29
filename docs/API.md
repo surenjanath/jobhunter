@@ -68,7 +68,10 @@ Every endpoint works without a model. `POST` with `{"ai": true}` (or `?ai=1` on 
 | `GET/POST /api/jobs/<id>/summary/` | TL;DR, must-haves, red flags, good signs, questions to ask |
 | `POST /api/jobs/<id>/rewrite/` | Your best bullets re-worded for the posting (rejects rewrites that add facts) |
 | `POST /api/jobs/<id>/outreach/` | `{kind}`: `follow_up`, `thank_you`, `recruiter_intro`, `referral` |
-| `POST /api/jobs/<id>/interview/feedback/` | `{question, answer}`: score, STAR coverage, tips |
+| `POST /api/jobs/<id>/interview/questions/` | `{n?, persona?, ai?}`: mock-interview questions; written by the model when `ai` is on (short, spoken-style), else the rule-built set |
+| `POST /api/jobs/<id>/interview/feedback/` | `{question, answer, voice?, persona?, ai?}`: content score, STAR coverage, tips, filler words, an `honest` one-line take, a `follow_up` probe (or null), and — with `voice` — `delivery` plus `composure` (a nerves read from vocal cues, with evidence, fixes and a caveat). With `ai`: `coach` notes, a follow-up reacting to the answer, and `stronger` (a rewrite using only your own facts; dropped if the model adds any). `persona`: `friendly` / `neutral` / `tough` |
+| `POST /api/ai/interview/summary/` | `{results, ai?, save?, job?}`: whole-session wrap-up (averages, composure trend, honest `readiness`, recurring tips); `save` stores it in your history |
+| `GET /api/ai/interview/sessions/` · `GET`/`DELETE /api/ai/interview/sessions/<id>/` | Saved mock interviews: the signed-in account's own, or the shared guest history when signed out |
 | `GET /api/jobs/<id>/similar/` | Listings most like this one, with shared skills |
 | `GET /api/recommendations/` | Untouched listings closest to those you starred or applied to |
 | `GET /api/profile/review/` | Resume critique with a score and prioritised fixes |

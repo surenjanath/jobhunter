@@ -189,8 +189,12 @@ def generate_claude_code(
 
 
 def generate_ollama(system: str, user: str, model: str | None = None,
-                    timeout: int = 240) -> str:
-    """Local model via Ollama's /api/chat. No key, no network egress."""
+                    timeout: int = 240, think: bool = False) -> str:
+    """Local model via Ollama's /api/chat. No key, no network egress.
+
+    think=False by default: "thinking" models (qwen3.x, gemma4, deepseek-r1…) otherwise spend most of their time on
+    hidden reasoning — measured here at 41s vs 1.2s for the same one-line answer. Models without a thinking mode ignore
+    the flag. Set cover_letter.ollama_think: true in profile.yaml to trade speed for that extra reasoning."""
     model = model or DEFAULT_OLLAMA_MODEL
     payload = json.dumps(
         {
@@ -201,6 +205,7 @@ def generate_ollama(system: str, user: str, model: str | None = None,
                 {"role": "user", "content": user},
             ],
             "options": {"temperature": 0.4, "num_ctx": 8192},
+            "think": bool(think),
         }
     ).encode()
 
@@ -325,7 +330,7 @@ def generate(system: str, user: str, cfg: dict | None = None) -> tuple[str, str]
         fn = BACKENDS[name]
         try:
             if name == "ollama":
-                text = fn(system, user, cfg.get("ollama_model"))  # type: ignore[call-arg]
+                text = fn(system, user, cfg.get("ollama_model"), think=bool(cfg.get("ollama_think")))  # type: ignore[call-arg]
             elif name == "anthropic":
                 text = fn(system, user, cfg.get("anthropic_model"))  # type: ignore[call-arg]
             else:

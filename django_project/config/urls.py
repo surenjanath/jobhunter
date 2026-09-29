@@ -10,6 +10,7 @@ urlpatterns = [
     path('pipeline/', core_views.pipeline, name='page-pipeline'),
     path('analytics/', core_views.analytics_page, name='page-analytics'),
     path('profile/', core_views.profile_page, name='page-profile'),
+    path('interview/', core_views.interview_page, name='page-interview'),
     path('trinidad/', core_views.trinidad_page, name='page-trinidad'),
     path('settings/', core_views.settings_page, name='page-settings'),
     path('health/', core_views.health, name='health'),

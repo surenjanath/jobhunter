@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block page %}
+      <section class="sheet" id="interviewCard">
+        <h1 class="sheet-title">Interview <span class="quiet">· Mock, out loud ·</span></h1>
+        <p class="quiet">A full mock interview for one of your roles. The interviewer reads each question aloud, you answer by speaking,
+          and at the end you get a report on what you said (structure, specifics, numbers) and how you said it (pace, tone, pauses, volume).
+          Voice analysis runs in your browser. No audio is uploaded or stored, only summary numbers.</p>
+        <div id="ivBody"></div>
+      </section>
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/interview.js' %}?v=8"></script>
+{% endblock %}

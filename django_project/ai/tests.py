@@ -107,6 +107,64 @@ class AITests(ScannerDBTestCase):
     def test_status(self):
         self.assertIn("privacy", self.c.get("/api/ai/status/").json())
 
+    def test_interview_summary_endpoint_and_voice_passthrough(self):
+        ans = "When our finance team had a reporting deadline I built a Django tool. My goal was to cut manual work, so I decided to automate it. It saved 100 hours a month."
+        voice = {"duration_sec": 30, "pace_wpm": 140, "pitch_mean_hz": 180, "pitch_stdev_hz": 35, "pause_ratio": 0.1, "long_pauses": 0, "volume_mean": 0.35, "volume_stdev": 0.08}
+        r = self.c.post("/api/jobs/a1/interview/feedback/", {"question": "q", "answer": ans, "voice": voice}, format="json").json()
+        self.assertIsNotNone(r["delivery"])
+        s = self.c.post("/api/ai/interview/summary/", {"results": [dict(r, question="q")]}, format="json")
+        self.assertEqual(s.status_code, 200)
+        self.assertEqual(s.json()["n"], 1)
+        self.assertEqual(self.c.post("/api/ai/interview/summary/", {"results": []}, format="json").status_code, 400)
+
+    def test_interview_sessions_saved_listed_and_private_per_account(self):
+        from django.contrib.auth.models import User
+        ans = "When our finance team had a reporting deadline I built a Django tool. My goal was to cut manual work, so I decided to automate it. It saved 100 hours a month."
+        r = dict(self.c.post("/api/jobs/a1/interview/feedback/", {"question": "q", "answer": ans}, format="json").json(), question="q", answer=ans)
+        job = {"job_id": "a1", "title": "Senior Python Developer", "company": "Acme"}
+        # not saved unless asked
+        self.c.post("/api/ai/interview/summary/", {"results": [r]}, format="json")
+        self.assertEqual(self.c.get("/api/ai/interview/sessions/").json()["sessions"], [])
+        # guest save -> shows in the guest history
+        sid = self.c.post("/api/ai/interview/summary/", {"results": [r], "save": True, "job": job}, format="json").json()["session_id"]
+        rows = self.c.get("/api/ai/interview/sessions/").json()["sessions"]
+        self.assertEqual([x["id"] for x in rows], [sid])
+        self.assertEqual(rows[0]["job_title"], "Senior Python Developer")
+        full = self.c.get(f"/api/ai/interview/sessions/{sid}/").json()
+        self.assertEqual(full["results"][0]["answer"], ans)
+        self.assertEqual(full["summary"]["n"], 1)
+        # a signed-in account sees only its own, and can't open or delete the guest one
+        u = User.objects.create_user(username="iv@example.com", password="correct-horse-battery-9")
+        other = APIClient(); other.force_authenticate(u)
+        self.assertEqual(other.get("/api/ai/interview/sessions/").json()["sessions"], [])
+        self.assertEqual(other.get(f"/api/ai/interview/sessions/{sid}/").status_code, 404)
+        self.assertEqual(other.delete(f"/api/ai/interview/sessions/{sid}/").status_code, 404)
+        mine = other.post("/api/ai/interview/summary/", {"results": [r], "save": True, "job": job}, format="json").json()["session_id"]
+        self.assertEqual([x["id"] for x in other.get("/api/ai/interview/sessions/").json()["sessions"]], [mine])
+        self.assertEqual([x["id"] for x in self.c.get("/api/ai/interview/sessions/").json()["sessions"]], [sid])
+        # delete
+        self.assertEqual(self.c.delete(f"/api/ai/interview/sessions/{sid}/").status_code, 200)
+        self.assertEqual(self.c.get("/api/ai/interview/sessions/").json()["sessions"], [])
+
+    def test_interview_questions_endpoint_rules_and_ai(self):
+        r = self.c.post("/api/jobs/a1/interview/questions/", {"n": 3}, format="json").json()
+        self.assertEqual(r["provider"], "rules")
+        self.assertTrue(1 <= len(r["questions"]) <= 3)
+        with mock.patch("src.ai_features._ask_llm") as llm:
+            self.c.post("/api/jobs/a1/interview/questions/", {"n": 3}, format="json")
+            llm.assert_not_called()                      # no model unless asked
+        reply = '{"questions":[{"q":"Walk me through your background.","why":"opener"},{"q":"Tell me about a Django project you shipped.","why":"b"},{"q":"How do you tune a slow PostgreSQL query?","why":"t"}]}'
+        with mock.patch("src.ai_features._ask_llm", return_value=(reply, "ollama")):
+            a = self.c.post("/api/jobs/a1/interview/questions/", {"n": 3, "ai": True, "persona": "tough"}, format="json").json()
+        self.assertEqual(a["provider"], "ollama")
+        self.assertEqual(len(a["questions"]), 3)
+        self.assertEqual(self.c.post("/api/jobs/nope/interview/questions/", {}, format="json").status_code, 404)
+
+    def test_feedback_persona_is_validated(self):
+        ans = "We had a deadline and we built a tool and we shipped it together as a team, it went fine overall for everyone."
+        r = self.c.post("/api/jobs/a1/interview/feedback/", {"question": "q", "answer": ans, "persona": "<script>"}, format="json")
+        self.assertEqual(r.status_code, 200)       # unknown persona falls back to neutral, never errors
+
     def test_voice_status_reflects_whether_kokoro_is_installed(self):
         with mock.patch("src.voice.available", return_value=False):
             self.assertEqual(self.c.get("/api/ai/voice/status/").json(), {

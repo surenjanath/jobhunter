@@ -12,10 +12,11 @@ class PageRouteTests(TestCase):
         "/pipeline/": ("pipeline", "Pipeline", "sheetPipeline", "pipelineBody"),
         "/analytics/": ("analytics", "Analytics", "analyticsCard", "anRoot"),
         "/profile/": ("profile", "Profile", "resumeCard", "resumeBody"),
+        "/interview/": ("interview", "Interview", "interviewCard", "ivBody"),
         "/trinidad/": ("trinidad", "Trinidad", "trinidadCard", "trinidadBody"),
         "/settings/": ("settings", "Settings", "settingsCard", "settingsSave"),
     }
-    OWN = {"sheetConditions", "jobsCard", "sheetPipeline", "analyticsCard", "resumeCard", "trinidadCard", "settingsCard"}
+    OWN = {"sheetConditions", "jobsCard", "sheetPipeline", "analyticsCard", "resumeCard", "interviewCard", "trinidadCard", "settingsCard"}
 
     def test_each_page_renders_with_its_own_content_only(self):
         for url, (key, label, section, marker) in self.PAGES.items():
@@ -33,7 +34,7 @@ class PageRouteTests(TestCase):
         for url, (key, label, *_rest) in self.PAGES.items():
             html = self.client.get(url).content.decode()
             links = re.findall(r'<a href="([^"]+)"( class="active" aria-current="page")?>([^<]+)</a>', html.split('id="mainNav"')[1].split("</nav>")[0])
-            self.assertEqual([l[0] for l in links], list(self.PAGES), url)           # all 7 pages, in order
+            self.assertEqual([l[0] for l in links], list(self.PAGES), url)           # all 8 pages, in order
             self.assertEqual([l[2].strip() for l in links if l[1]], [label], url)     # exactly the current one is active
             self.assertNotIn('href="#"', html.split('id="mainNav"')[1].split("</nav>")[0])
 
@@ -56,3 +57,19 @@ class PageRouteTests(TestCase):
     def test_api_paths_are_untouched_by_page_routes(self):
         for u in ("/api/profile/", "/api/settings/", "/health/"):
             self.assertIn("application/json", self.client.get(u)["Content-Type"])
+
+
+class VoiceCueContractTests(TestCase):
+    """Every cue the browser's startMetrics() emits must have a merge rule in interview.js's mergeVoice(), or it is
+    silently dropped whenever an answer has a follow-up (this happened: the nerves never reached the server)."""
+    def test_every_emitted_voice_cue_has_a_merge_rule(self):
+        from pathlib import Path
+        js = Path(__file__).resolve().parent.parent / "static" / "js"
+        ai, iv = (js / "ai.js").read_text(), (js / "interview.js").read_text()
+        emitted = set(re.findall(r"(?:\bv|\bout)\.([a-z_]+)=", ai))
+        for block in re.findall(r"const v=\{([^}]*)\}", ai):
+            emitted |= set(re.findall(r"([a-z_]+):", block))
+        merge = iv[iv.index("const MERGE="):iv.index("function mergeVoice")]
+        ruled = set(re.findall(r"'([a-z_]+)'", merge))
+        self.assertGreater(len(emitted), 10)
+        self.assertEqual(emitted - ruled, set())

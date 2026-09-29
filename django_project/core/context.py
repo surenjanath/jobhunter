@@ -10,6 +10,7 @@ PAGES = [
     ("pipeline", "Pipeline", "page-pipeline"),
     ("analytics", "Analytics", "page-analytics"),
     ("profile", "Profile", "page-profile"),
+    ("interview", "Interview", "page-interview"),
     ("trinidad", "Trinidad", "page-trinidad"),
     ("settings", "Settings", "page-settings"),
 ]

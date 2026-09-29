@@ -62,3 +62,25 @@ class UserJobMatch(models.Model):
     class Meta:
         unique_together = [("user", "job_id")]
         indexes = [models.Index(fields=["user", "fit_score"])]
+
+
+class InterviewSession(models.Model):
+    """One finished mock interview (the Interview page): scores, the wrap-up, and every question's result.
+    user is NULL for the shared/no-account instance, the same way the rest of the app treats guests."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, related_name="interview_sessions")
+    job_id = models.CharField(max_length=255, blank=True, default="")
+    job_title = models.TextField(blank=True, default="")
+    company = models.TextField(blank=True, default="")
+    overall = models.IntegerField(default=0)
+    content = models.IntegerField(default=0)
+    delivery = models.IntegerField(null=True, blank=True)
+    n = models.IntegerField(default=0)
+    summary = models.JSONField(default=dict, blank=True)
+    results = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user or 'guest'} · {self.job_title} · {self.overall}"
