@@ -689,6 +689,8 @@ def main() -> int:
         test_ai.run(check, cfg)
         from tests import test_dismiss
         test_dismiss.run(check, cfg)
+        from tests import test_voice
+        test_voice.run(check, cfg)
     finally:
         for p in out.glob("cover_*.md"):
             if p not in letters_before:

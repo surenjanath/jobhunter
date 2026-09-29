@@ -297,13 +297,17 @@ def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = Fa
         missing_terms = [s for s in asked if s not in skills]
         if missing_terms:
             tips.append("You could name the skills the posting cares about that you actually used: " + ", ".join(missing_terms) + ".")
+    verdict = "Strong" if score >= 75 else "Solid, tighten it" if score >= 55 else "Needs structure"
     out = {"score": score, "star": star, "words": len(words), "numbers": has_nums, "skills_named": skills[:8], "tips": tips[:6],
-           "verdict": "Strong" if score >= 75 else "Solid, tighten it" if score >= 55 else "Needs structure", "provider": "rules"}
+           "verdict": verdict, "provider": "rules"}
     if use_llm:
         text, backend = _ask_llm("You are an interview coach. Give three short, specific improvements to this answer. Do not invent facts. Plain words.",
                                  f"Question: {question}\nAnswer: {answer}", cfg)
         if text:
             out.update(coach=text.strip(), provider=backend)
+    # what a voice interviewer would say back — plain text; actual speech synthesis (optional, needs Kokoro) is src.voice.synthesize()
+    speak_tip = re.sub(r"^[A-Za-z ,]+: ", "", tips[0]) if tips else ""
+    out["speech"] = f"You scored {score} out of 100. {verdict}." + (f" The main thing to work on: {speak_tip}" if speak_tip else " Nicely done.")
     return out
 
 

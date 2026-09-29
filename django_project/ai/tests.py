@@ -106,3 +106,29 @@ class AITests(ScannerDBTestCase):
 
     def test_status(self):
         self.assertIn("privacy", self.c.get("/api/ai/status/").json())
+
+    def test_voice_status_reflects_whether_kokoro_is_installed(self):
+        with mock.patch("src.voice.available", return_value=False):
+            self.assertEqual(self.c.get("/api/ai/voice/status/").json(), {
+                "available": False,
+                "detail": "Not installed. pip install kokoro soundfile numpy (plus espeak-ng) for a spoken interviewer.",
+                "voices": []})
+
+    def test_speak_503s_with_json_when_kokoro_missing_not_a_500_html_page(self):
+        with mock.patch("src.voice.available", return_value=False):
+            r = self.c.get("/api/ai/voice/speak/?text=Hello")
+        self.assertEqual(r.status_code, 503)
+        self.assertIn("application/json", r["Content-Type"])
+        self.assertIn("kokoro", r.json()["error"].lower())
+
+    def test_speak_requires_text(self):
+        self.assertEqual(self.c.get("/api/ai/voice/speak/").status_code, 400)
+
+    def test_speak_returns_audio_and_is_cached(self):
+        with mock.patch("src.voice.synthesized_content_type", return_value=(b"fake-mp3-bytes", "audio/mpeg")) as m:
+            r = self.c.get("/api/ai/voice/speak/?text=" + "Tell%20me%20about%20yourself")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r["Content-Type"], "audio/mpeg")
+        self.assertEqual(r.content, b"fake-mp3-bytes")
+        self.assertIn("immutable", r["Cache-Control"])
+        m.assert_called_once()

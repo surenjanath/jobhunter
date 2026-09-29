@@ -75,6 +75,13 @@ Every endpoint works without a model. `POST` with `{"ai": true}` (or `?ai=1` on 
 | `POST /api/ai/ask/` | `{q}`: plain English to Ledger filters (`params` for the Ledger URL) |
 | `POST /api/ai/roadmap/` | `{skill, jobs?, sole_gap?}`: learning plan for one missing skill |
 
+### Voice (the mock interview read aloud — optional, needs Kokoro: see `jobhunt/src/voice.py`)
+
+| Method & path | What it does |
+|---|---|
+| `GET /api/ai/voice/status/` | `{available, detail, voices}` — whether Kokoro is installed |
+| `GET /api/ai/voice/speak/?text=...` | `text` synthesized to speech (`audio/mpeg`, or `audio/wav` with no `ffmpeg` on the machine). `503` with a JSON `error` when Kokoro isn't installed — text scoring above still works either way. `interview/feedback/`'s response includes a `speech` field: the exact text this endpoint should say back. |
+
 ## Running the scanner
 
 | Method & path | What it does |

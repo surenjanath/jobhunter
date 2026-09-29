@@ -66,7 +66,10 @@ an outside provider are opt-in and say so). There is no account and no login.
 **AI features** (every one works with built-in rules; a model, local or hosted, only *polishes* the result and only when you tick "Polish with AI")
 - **Posting summary and red flags**: a plain-words TL;DR, must-haves, "wear many hats" / unpaid / stale / years-vs-level flags, good signs, and questions to ask them.
 - **Bullet rewriter**: your best resume bullets for the posting, re-worded. A guardrail rejects any rewrite that adds a tool, number or claim your original did not contain.
-- **Interview practice**: write an answer, get a score on STAR structure, numbers, specifics, "I" vs "we" and filler.
+- **Interview practice, spoken or typed**: answer a likely question by typing or by voice (your browser's own speech
+  recognition — nothing sent anywhere for that part), get scored on STAR structure, numbers, specifics, "I" vs "we"
+  and filler, and optionally have the question and your results read back by a local voice (Kokoro — no cloud,
+  no API key; `pip install kokoro soundfile numpy` to turn it on, works as plain text without it).
 - **Outreach drafts**: follow-up, thank-you, recruiter message and referral ask, built from your best matching bullet.
 - **Resume review**: weak openers, missing numbers, buzzwords, gaps, skills listed but never shown, with your own lines as examples.
 - **Similar listings** and **Recommended for you** (learned from what you star and apply to), **plain-English search** in the command palette

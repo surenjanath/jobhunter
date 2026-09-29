@@ -378,3 +378,7 @@ mark.hl.have{background:rgba(127,127,120,.18)}
 #alerts{width:min(1180px,100%);margin:0 auto}
 #alerts .banner{padding:0 0 16px;font-size:14px;color:var(--mute)}
 #alerts .banner a{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+
+/* ---- interview practice: voice ------------------------------------------------------------------------------------ */
+.pxrow{display:flex;gap:8px;align-items:center}
+#pxMic.on{color:var(--gap,#b4533c);border-color:var(--gap,#b4533c)}

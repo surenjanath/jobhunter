@@ -12,4 +12,6 @@ urlpatterns = [
     path('jobs/<path:job_id>/outreach/', views.outreach, name='ai-outreach'),
     path('jobs/<path:job_id>/interview/feedback/', views.interview_feedback, name='ai-feedback'),
     path('jobs/<path:job_id>/similar/', views.similar, name='ai-similar'),
+    path('ai/voice/status/', views.voice_status, name='ai-voice-status'),
+    path('ai/voice/speak/', views.speak, name='ai-voice-speak'),
 ]

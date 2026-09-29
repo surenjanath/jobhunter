@@ -65,6 +65,12 @@ adds one call through `llm.generate` and the result is validated: rewrites and d
 the source text (`grounded()`), otherwise the rules output is kept and the UI says so. The Django app `ai` is a thin JSON layer; it
 must be included before `jobs.urls` because `/api/jobs/<path>/…` is greedy.
 
+**Voice** (`src/voice.py`): text-to-speech for the mock interview, via Kokoro — optional and lazily imported the
+same way an LLM provider or the embedding model is; `interview_feedback()` always returns a `speech` field (plain
+text, no dependency needed to build it), and `GET /api/ai/voice/speak/?text=...` turns any text into audio when
+Kokoro is installed. Speech *input* (the candidate's spoken answer) is the browser's own Speech Recognition API —
+no server component, no dependency, nothing sent anywhere for that half.
+
 ## Database (`jobhunt/output/jobhunt.db`)
 
 `jobs` (scored listings incl. `match_json`), `app_status` (status, follow-up, notes, starred), `scans`, `source_runs`

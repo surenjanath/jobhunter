@@ -19,6 +19,11 @@ def _feat():
     return ai_features
 
 
+def _voice():
+    from src import voice
+    return voice
+
+
 def _cfg() -> dict:
     from core.settings_store import _load_yaml
     return _load_yaml().get("cover_letter") or {}
@@ -138,3 +143,38 @@ def roadmap(request):
     demand = {"jobs": num("jobs"), "sole_gap": num("sole_gap")} if num("jobs") else None
     out = _feat().roadmap(str(request.data.get("skill") or ""), demand, use_llm=_want_ai(request), cfg=_cfg())
     return Response(out, status=400 if out.get("error") else 200)
+
+
+# ---------------------------------------------------------------------------
+# voice — the mock interview read aloud (Kokoro, optional; see jobhunt/src/voice.py). Text scoring
+# (interview_feedback, above) always works without this; these two endpoints add the spoken half.
+# ---------------------------------------------------------------------------
+
+@api_view(["GET"])
+def voice_status(request):
+    return Response(_voice().status())
+
+
+@api_view(["GET"])
+def speak(request):
+    """?text=...  ->  audio/mpeg (or audio/wav if this machine has no ffmpeg). Cached on disk by the exact text,
+    voice and speed, so the same question or result is only ever synthesized once."""
+    from django.http import HttpResponse
+    text = (request.GET.get("text") or "").strip()
+    if not text:
+        return Response({"error": "text required"}, status=400)
+    v = _voice()
+    voice_name = request.GET.get("voice") or v.DEFAULT_VOICE
+    try:
+        speed = float(request.GET.get("speed") or 1.05)
+    except ValueError:
+        speed = 1.05
+    try:
+        data, content_type = v.synthesized_content_type(text, voice_name, speed)
+    except v.VoiceUnavailable as e:
+        return Response({"error": str(e)}, status=503)
+    except Exception as e:  # noqa: BLE001 — a synthesis failure must stay text-first-friendly, never a 500 HTML page
+        return Response({"error": f"could not synthesize speech: {e}"}, status=500)
+    resp = HttpResponse(data, content_type=content_type)
+    resp["Cache-Control"] = "public, max-age=31536000, immutable"   # content-addressed by (text, voice, speed) — safe to cache hard
+    return resp

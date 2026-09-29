@@ -1,8 +1,34 @@
 // ai.js — the AI features in the UI: posting summary + red flags, bullet rewriter, interview practice feedback, outreach drafts,
 // similar jobs, recommendations, resume review, plain-English search and skill roadmaps. Every feature works without a model;
 // the "Polish with AI" switch adds one — and says exactly where the text goes before it is sent.
-let AI_STATUS=null;
+let AI_STATUS=null, VOICE_STATUS=null;
 async function aiStatus(){ if(!AI_STATUS){ try{ AI_STATUS=await jfetch('/api/ai/status/'); }catch(e){ AI_STATUS={providers:{},any:false,privacy:{}}; } } return AI_STATUS; }
+async function voiceStatus(){ if(!VOICE_STATUS){ try{ VOICE_STATUS=await jfetch('/api/ai/voice/status/'); }catch(e){ VOICE_STATUS={available:false,detail:'',voices:[]}; } } return VOICE_STATUS; }
+
+// ---- speak (Kokoro TTS) and listen (the browser's own speech recognition — no server round trip) -------------------
+async function speak(text, btn){
+  if(!text) return;
+  const orig=btn?btn.innerHTML:''; if(btn){ btn.disabled=true; btn.textContent='…'; }
+  try{
+    const r=await fetch('/api/ai/voice/speak/?text='+encodeURIComponent(text));
+    if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||`HTTP ${r.status}`); }
+    const audio=new Audio(URL.createObjectURL(await r.blob()));
+    audio.onended=()=>URL.revokeObjectURL(audio.src);
+    await audio.play();
+  }catch(e){ toast(e.message||'Could not play audio','bad'); }
+  if(btn){ btn.disabled=false; btn.innerHTML=orig; }
+}
+const sttSupported=()=>!!(window.SpeechRecognition||window.webkitSpeechRecognition);
+function listen(onText, onEnd){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition, rec=new SR();
+  rec.lang='en-US'; rec.interimResults=true; rec.continuous=true;
+  let finalText='';
+  rec.onresult=e=>{ let interim=''; for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; if(e.results[i].isFinal) finalText+=t+' '; else interim+=t; } onText(finalText+interim); };
+  rec.onerror=e=>{ if(e.error!=='no-speech') toast('Voice input: '+e.error,'bad'); };
+  rec.onend=onEnd;
+  rec.start();
+  return rec;
+}
 const aiPost=(url,body)=>jfetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
 function aiSwitch(st){
   if(!st.any) return '<p class="co">No AI model connected, so the built-in rules are doing the work (they are decent). Install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> to add a private local model.</p>';
@@ -45,10 +71,23 @@ async function renderAiTab(j){
     try{ paint(await aiPost(`/api/jobs/${id}/rewrite/`,{})); }catch(e){ fail(e); }
   } else if(CURRENT_TAB==='practice'){
     let qs=[]; try{ qs=(await jfetch(`/api/jobs/${id}/interview/`)).questions||[]; }catch(e){ /* free text still works */ }
-    body.innerHTML=`<p class="co">Pick a likely question, write your answer as you'd say it, and get scored on structure (situation, task, action, result), specifics and numbers. Your answer stays on this machine unless you switch AI on.</p>
-      <select id="pxQ" style="width:100%">${qs.map(q=>`<option>${esc(q.q)}</option>`).join('')||'<option>Tell me about a project you are proud of.</option>'}</select>
-      <textarea id="pxA" rows="7" placeholder="Write your answer here (about 90–200 words)…" style="width:100%;margin-top:8px"></textarea>
-      <div class="aibar">${aiSwitch(st)}<button type="button" class="go sm" id="pxGo">Score my answer</button></div><div id="pxOut"></div>`;
+    const vst=await voiceStatus();
+    body.innerHTML=`<p class="co">Pick a likely question, answer it — typed or spoken — and get scored on structure (situation, task, action, result), specifics and numbers. Nothing leaves this machine unless you switch AI on${vst.available?' (speech synthesis is local too — Kokoro, no cloud)':''}.</p>
+      <div class="pxrow"><select id="pxQ" style="flex:1">${qs.map(q=>`<option>${esc(q.q)}</option>`).join('')||'<option>Tell me about a project you are proud of.</option>'}</select>
+      <button type="button" class="sm" id="pxPlayQ" ${vst.available?'':'disabled title="Install Kokoro to hear questions read aloud: pip install kokoro soundfile numpy"'}>🔊 Play question</button></div>
+      <textarea id="pxA" rows="7" placeholder="Write your answer here (about 90–200 words)…, or use Speak my answer below" style="width:100%;margin-top:8px"></textarea>
+      <div class="aibar">
+        <button type="button" class="sm" id="pxMic" ${sttSupported()?'':'disabled title="Your browser does not support speech input — try Chrome or Edge"'}>🎙️ Speak my answer</button>
+        ${aiSwitch(st)}<button type="button" class="go sm" id="pxGo">Score my answer</button>
+      </div><div id="pxOut"></div>`;
+    $('#pxPlayQ').onclick=e=>speak($('#pxQ').value, e.currentTarget);
+    let rec=null, before='';
+    const mic=$('#pxMic');
+    mic.onclick=()=>{
+      if(rec){ rec.stop(); return; }
+      before=$('#pxA').value.trim(); mic.textContent='⏹ Stop (listening…)'; mic.classList.add('on');
+      rec=listen(text=>{ $('#pxA').value=(before?before+' ':'')+text; }, ()=>{ rec=null; mic.textContent='🎙️ Speak my answer'; mic.classList.remove('on'); });
+    };
     $('#pxGo').onclick=async()=>{
       const out=$('#pxOut'); out.innerHTML='<span class="co">Scoring…</span>';
       try{
@@ -56,7 +95,9 @@ async function renderAiTab(j){
         const star=Object.entries(d.star).map(([k,v])=>`<span class="flag ${v?'g':'b'}">${v?'✓':'○'} ${esc(k)}</span>`).join('');
         out.innerHTML=`<div class="kpi"><div class="box"><b>${d.score}</b><span>Score</span></div><div class="box"><b>${d.words}</b><span>Words</span></div><div class="box"><b>${d.numbers?'yes':'no'}</b><span>Numbers</span></div><div class="box"><b>${esc(d.verdict)}</b><span>Verdict</span></div></div>
           <div style="margin:8px 0">${star}</div><ul class="list">${d.tips.map(t=>`<li>💡 ${esc(t)}</li>`).join('')||'<li class="co">Nothing to fix. Nice.</li>'}</ul>
-          ${d.coach?`<div class="banner"><b>Coach</b> ${providerTag(d.provider)}<br>${esc(d.coach).replace(/\n/g,'<br>')}</div>`:''}`;
+          ${d.coach?`<div class="banner"><b>Coach</b> ${providerTag(d.provider)}<br>${esc(d.coach).replace(/\n/g,'<br>')}</div>`:''}
+          <div class="actions" style="margin-top:8px"><button type="button" class="sm" id="pxPlayResult" ${vst.available?'':'disabled title="Install Kokoro to hear this read aloud"'}>🔊 Hear my results</button></div>`;
+        const pr=$('#pxPlayResult'); if(pr) pr.onclick=e=>speak(d.speech, e.currentTarget);
       }catch(e){ out.innerHTML=`<div class="banner w">${esc(e.message)}</div>`; }
     };
   } else if(CURRENT_TAB==='outreach'){
