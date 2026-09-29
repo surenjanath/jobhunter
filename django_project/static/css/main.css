@@ -442,3 +442,25 @@ mark.hl.have{background:rgba(127,127,120,.18)}
 .iv-inline{display:inline-block;vertical-align:middle}
 .iv-inline .iv-spark{display:inline-block}
 .iv-setup select#ivPersona{max-width:420px}
+/* ---- interview coach tabs ------------------------------------------------------------------------------------------ */
+.iv-tabs{display:flex;gap:18px;flex-wrap:wrap;border-bottom:1px solid var(--rule);margin:6px 0 16px;font-size:14px}
+.iv-tabs button{padding:8px 0;color:var(--mute);border-bottom:2px solid transparent}
+.iv-tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+.iv-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--ink);color:var(--canvas);font-size:11px;text-align:center}
+.iv-badge[hidden]{display:none}
+.iv-base{padding:8px 0;border-top:1px dashed var(--rule)}
+.iv-basepass blockquote{margin:8px 0;padding:10px 14px;border-left:2px solid var(--ink);line-height:1.6}
+.iv-campreview{width:96px;height:72px;object-fit:cover;transform:scaleX(-1);border:1px solid var(--rule)}
+.iv-replay audio{height:28px;vertical-align:middle;margin-right:6px}
+.cs-story textarea,.cs-plan textarea,#csReal input,#csReal textarea,#csReal select,#csStories input,#csStories textarea,#csDrills input{border:1px solid var(--rule);background:var(--canvas);color:var(--ink);padding:6px}
+.cs-ri,.cs-sug{padding:10px 0;border-bottom:1px solid var(--rule)}
+.cs-sug{display:flex;gap:16px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.cs-plan{margin:10px 0 4px;padding:10px 14px;border-left:2px solid var(--ink)}
+.cs-plan h4{margin:12px 0 4px}
+.cs-plan label{cursor:pointer}
+.cs-over{color:#b4533c}
+.cs-delta{font-size:13px;margin-left:4px}
+#csStories .actions,#csDrills .actions,#csReal .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px}
+#csStories .spacer{flex:1}
+#csDrills button.sm,#csReal button.sm,#csStories button.sm{border:1px solid var(--rule);padding:2px 10px}
+@media print{.iv-tabs{display:none}}

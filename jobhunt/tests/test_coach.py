@@ -24,6 +24,8 @@ def run(check, cfg):
 
     # ---- voice baseline -------------------------------------------------------------------------------------------
     check("baseline: too short -> None", coach.baseline_from({"duration_sec": 4, "pitch_mean_hz": 150}) is None)
+    check("baseline: impossibly fast (stopped mid-passage) -> None, never a wrong baseline",
+          coach.baseline_from({"duration_sec": 13, "pitch_mean_hz": 150, "pace_wpm": 292}) is None)
     base = coach.baseline_from({"duration_sec": 25, "pace_wpm": 175, "pitch_mean_hz": 120, "jitter": 0.035, "pitch_range_st": 6, "uptalk_ratio": 0.3})
     check("baseline: keeps the calm-voice numbers", base["pace_wpm"] == 175 and base["pitch_mean_hz"] == 120, base)
     t = coach.personal_thresholds(base)
@@ -48,6 +50,11 @@ def run(check, cfg):
           and {"Django", "PostgreSQL"} <= set(st["skills"]) and st["star"]["result"], st)
     cov = coach.story_coverage([{"text": "Experience building triage and scoring tools for claims"}], ["Django", "Kubernetes"], [dict(st, id=1)])
     check("coverage: skill with a story is covered, one without is a gap", cov["gaps"] == ["Kubernetes"] and cov["covered"] == 2, cov)
+    rag = dict(coach.story_from("q", "I built a RAG assistant in Python that answered underwriting questions and cut lookups from 20 minutes to 2.", 80), id=2)
+    cov2 = coach.story_coverage([], ["LLMs", "Python", "Terraform"], [rag])
+    llm_row = next(r for r in cov2["rows"] if r["skill"] == "LLMs")
+    check("coverage: a related-skill story counts as PARTIAL, labelled, not as full coverage",
+          llm_row["partial"] == "RAG" and cov2["covered"] == 1 and cov2["partial"] == 1 and cov2["gaps"] == ["Terraform"], cov2)
 
     # ---- drills -------------------------------------------------------------------------------------------------------
     d0 = date(2026, 9, 1)
@@ -59,6 +66,7 @@ def run(check, cfg):
 
     # ---- interview types ----------------------------------------------------------------------------------------------
     check("types: each kind has questions", all(coach.typed_questions(k, job, ["Python", "Django"], {"amount": 12000}) for k in ("screen", "technical", "negotiation", "reverse")))
+    check("types: the offer is spoken naturally, not as 'US$/mo'", "US dollars a month" in coach.typed_questions("negotiation", job, [], {"amount": 4000, "unit": "US$/mo"})[0]["q"])
     check("types: negotiation opens with a concrete offer", "12,000" in coach.typed_questions("negotiation", job, [], {"amount": 12000, "unit": "TT$ a month"})[0]["q"])
     offer = {"amount": 12000}
     strong_neg = ("Thank you, I'm excited about the role. Based on similar roles in the market and the results I've delivered, "
@@ -85,6 +93,8 @@ def run(check, cfg):
 
     # ---- prep plan + research -----------------------------------------------------------------------------------------
     rb = coach.research_brief(job, ["Python", "Django"])
+    check("research brief: stack is technologies only (no 'English', 'Education')",
+          not {"English", "Education"} & set(coach.research_brief({**job, "description": job["description"] + " Fluent English. Degree in Education."}, [])["stack"]))
     check("research brief: about lines, values, stack, questions", rb["about"] and "ownership" in rb["values"] and "Django" in rb["stack"] and len(rb["questions_to_ask"]) >= 3, rb)
     plan = coach.prep_plan(job, date(2026, 9, 10), "technical", today=date(2026, 9, 3), gaps=["Kubernetes"], has_baseline=False)
     keys = [t["key"] for t in plan["tasks"]]

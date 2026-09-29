@@ -94,3 +94,28 @@ Every endpoint works without a model. `POST` with `{"ai": true}` (or `?ai=1` on 
 | `POST /api/live-check/`, `/api/tests/` | Audit real sources / run the test suite |
 | `GET /api/state/`, `/api/stats/`, `/health/` | App state, counts, health |
 | `GET/PUT /api/settings/`, `POST /api/provider/` | Settings and the cover-letter provider |
+
+### Interview coach (`coach/views.py`, logic in `jobhunt/src/coach.py`)
+
+All of these are private to the signed-in account, or the shared guest data when nobody is signed in.
+
+| Endpoint | What |
+|---|---|
+| `GET`/`POST`/`DELETE /api/coach/baseline/` | Calm-voice baseline. `POST {voice}` with the voice metrics from reading the passage aloud; composure is then judged against it. Rejects reads that are too short or impossibly fast (stopped before the end) |
+| `GET`/`POST /api/coach/stories/` · `PUT`/`DELETE /api/coach/stories/<id>/` | Story bank: `{question?, text, score?, job_id?}` → STAR check + skills tagged |
+| `GET /api/coach/coverage/<job_id>/` | Which of a posting's requirements have a story (`covered`), a story about a related skill (`partial`), or none (`gaps`) |
+| `GET`/`POST /api/coach/drills/` · `POST {score}`/`DELETE /api/coach/drills/<id>/` | Spaced-repetition drills (`due`, `upcoming`, `mastered`). Weak answers (< 65) from saved mock interviews and questions logged from real interviews are added automatically |
+| `GET`/`POST /api/coach/interviews/` · `GET`/`PUT`/`DELETE /api/coach/interviews/<id>/` | Real interviews `{job_id, scheduled_on, stage}`. `PUT {done_tasks}` ticks the prep plan; `PUT {log: {questions, felt 1-5, outcome, notes}}` logs it afterwards |
+| `GET /api/coach/interviews/<id>/plan/?ai=1` | Day-by-day prep plan, research brief (AI brief with `ai`), story coverage |
+| `POST /api/coach/inbox/parse/` · `GET /api/coach/inbox/` · `POST /api/coach/inbox/<id>/ {action}` | Classify a recruiter email and match it to a tracked job → a suggestion you `applied` or `dismissed`. Never applied automatically |
+| `GET /api/coach/weekly/` | This week vs last: applications, response rate, interviews, offers, mocks, composure, drills, stories |
+
+`POST /api/jobs/<id>/interview/questions/` and `.../interview/feedback/` also take `kind`: `behavioural` (default), `screen`,
+`technical`, `negotiation` (the questions response includes the opening `offer`) or `reverse` (your questions for them).
+Feedback also accepts `camera` (on-device face tracking summary) and `interrupted`.
+
+**Checking your inbox automatically** (optional): `python manage.py check_inbox --days 14 [--account you@example.com]`.
+It reads email over IMAP **read-only** (the mailbox is opened read-only and messages are fetched without marking them read)
+and only creates suggestions. Credentials come from the environment:
+`JOBHUNT_IMAP_HOST` (e.g. `imap.gmail.com`), `JOBHUNT_IMAP_USER`, `JOBHUNT_IMAP_PASSWORD`: use an **app password**
+(Gmail: Google Account → Security → App passwords), never your real password. Schedule it like `scripts/scan-cron.sh`.

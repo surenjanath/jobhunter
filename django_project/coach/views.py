@@ -63,7 +63,7 @@ def _requirements(request, job: dict) -> tuple[list[dict], list[str]]:
         return [], []
     m = matching.evaluate(dict(job), ctx)
     reqs = [{"text": r["text"]} for r in (m.get("requirements") or [])][:8]
-    skills = [i["name"] for i in m["skills"]["items"] if i["kind"] == "required" and i["status"] != "soft"][:8]
+    skills = [i["name"] for i in m["skills"]["items"] if i["kind"] == "required" and i["status"] != "soft"][:20]
     return reqs, skills
 
 
@@ -77,7 +77,9 @@ def baseline(request):
         voice = request.data.get("voice") if isinstance(request.data.get("voice"), dict) else None
         metrics = _coach().baseline_from(voice)
         if not metrics:
-            return Response({"error": "Not enough clear speech to use as a baseline: read the whole passage aloud (at least 10 seconds)."}, status=400)
+            fast = voice and (voice.get("pace_wpm") or 0) > 240
+            return Response({"error": "That was faster than anyone reads aloud: it looks like you stopped before the end. Read the whole passage at a relaxed pace, then click Done."
+                             if fast else "Not enough clear speech to use as a baseline: read the whole passage aloud (at least 10 seconds)."}, status=400)
         _mine(request, VoiceBaseline).delete()
         VoiceBaseline.objects.create(user=_owner(request), metrics=metrics)
     elif request.method == "DELETE":

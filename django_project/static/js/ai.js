@@ -86,22 +86,29 @@ function composureCues(frames, dt){
   }
   return out;
 }
-async function startMetrics(onLevel){
+// opts.record: also keep the raw audio IN THIS PAGE ONLY (MediaRecorder -> a blob URL) so you can hear yourself back.
+// It is never uploaded or saved: the returned stop function exposes it as stop.audio (a Promise of a blob: URL).
+async function startMetrics(onLevel, opts){
   const stream=await navigator.mediaDevices.getUserMedia({audio:true});
   const ctx=new (window.AudioContext||window.webkitAudioContext)(), src=ctx.createMediaStreamSource(stream);
   const proc=ctx.createScriptProcessor(2048,1,1), mute=ctx.createGain(); mute.gain.value=0;
   if(ctx.state==='suspended') await ctx.resume().catch(()=>{});
   src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);   // must reach the destination to run; muted, so no echo
   const frames=[]; let dt=2048/ctx.sampleRate;
+  let recorder=null, chunks=[];
+  if(opts&&opts.record&&window.MediaRecorder){ try{ recorder=new MediaRecorder(stream); recorder.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); }; recorder.start(); }catch(e){ recorder=null; } }
   proc.onaudioprocess=ev=>{
     const buf=ev.inputBuffer.getChannelData(0); dt=buf.length/ctx.sampleRate;
     let e=0; for(let i=0;i<buf.length;i++) e+=buf[i]*buf[i]; e=Math.sqrt(e/buf.length);
     if(onLevel) onLevel(e);
     frames.push({e, f:e>=SILENCE_RMS?framePitch(buf,ctx.sampleRate):null});
   };
-  return words=>{
+  const stop=words=>{
     proc.onaudioprocess=null; try{ src.disconnect(); proc.disconnect(); }catch(e){}
-    stream.getTracks().forEach(t=>t.stop()); ctx.close();
+    stop.audio=recorder&&recorder.state!=='inactive'
+      ? new Promise(res=>{ recorder.onstop=()=>res(chunks.length?URL.createObjectURL(new Blob(chunks,{type:recorder.mimeType||'audio/webm'})):null); recorder.stop(); })
+      : Promise.resolve(null);
+    stop.audio.then(()=>{ stream.getTracks().forEach(t=>t.stop()); ctx.close(); });
     const total=frames.length*dt, vol=frames.filter(x=>x.e>=SILENCE_RMS).map(x=>x.e), pitch=frames.map(x=>x.f).filter(Boolean);
     if(total<3||!vol.length) return null;
     let silent=0, run=0, longPauses=0;
@@ -112,6 +119,7 @@ async function startMetrics(onLevel){
     if(pitch.length>=8){ v.pitch_mean_hz=Math.round(mean(pitch)); v.pitch_stdev_hz=Math.round(sd(pitch)); }
     return Object.assign(v, composureCues(frames, dt));
   };
+  return stop;
 }
 const aiPost=(url,body)=>jfetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
 function aiSwitch(st){

@@ -36,6 +36,8 @@ def baseline_from(voice: dict | None) -> dict | None:
     """Keep what a calm read-aloud tells us about your normal voice. Needs enough signal to be worth trusting."""
     if not voice or (voice.get("duration_sec") or 0) < 10 or not voice.get("pitch_mean_hz"):
         return None
+    if (voice.get("pace_wpm") or 0) > 240:   # nobody reads aloud this fast: they stopped before the end of the passage
+        return None
     return {k: voice[k] for k in BASELINE_KEYS if voice.get(k) is not None}
 
 
@@ -89,13 +91,20 @@ def story_coverage(requirements: list[dict], skills_needed: list[str], stories: 
     rows = []
     for sk in skills_needed:
         hits = by_skill.get(sk.lower(), [])
-        rows.append({"skill": sk, "stories": [{"id": h.get("id"), "title": h["title"], "score": h.get("score")} for h in hits[:3]]})
+        partial = False
+        if not hits:   # a story about a closely related skill is partial evidence (RAG work speaks to "LLMs"), and says so
+            for rel in sorted(tax.related(sk)):
+                hits = by_skill.get(rel.lower(), [])
+                if hits:
+                    partial = rel
+                    break
+        rows.append({"skill": sk, "partial": partial, "stories": [{"id": h.get("id"), "title": h["title"], "score": h.get("score")} for h in hits[:3]]})
     for req in requirements:
         words = {w for w in re.findall(r"[a-z]{5,}", (req.get("text") or "").lower())} - {"experience", "years", "strong", "ability", "working", "knowledge"}
         hits = [s for s in stories if len(words & set(re.findall(r"[a-z]{5,}", s["text"].lower()))) >= 2]
         rows.append({"requirement": req["text"][:160], "stories": [{"id": h.get("id"), "title": h["title"], "score": h.get("score")} for h in hits[:3]]})
-    covered = sum(1 for r in rows if r["stories"])
-    return {"rows": rows, "covered": covered, "total": len(rows),
+    covered = sum(1 for r in rows if r["stories"] and not r.get("partial"))
+    return {"rows": rows, "covered": covered, "partial": sum(1 for r in rows if r.get("partial") and r["stories"]), "total": len(rows),
             "gaps": [r.get("skill") or r.get("requirement") for r in rows if not r["stories"]]}
 
 
@@ -156,8 +165,13 @@ def typed_questions(kind: str, job: dict, required_skills: list[str], offer: dic
     return []
 
 
+_SPOKEN_UNIT = {"TT$/mo": "TT dollars a month", "US$/mo": "US dollars a month", "TT$ a month": "TT dollars a month", "US$ a month": "US dollars a month"}
+
+
 def _offer_line(offer: dict | None) -> str:
+    """Read aloud, so the unit is written the way a person says it ("US dollars a month", not "US$/mo")."""
     if offer and offer.get("amount"):
+        offer = {**offer, "unit": _SPOKEN_UNIT.get(offer.get("unit", ""), offer.get("unit") or "a month")}
         return (f"We'd like to make you an offer: {offer['amount']:,} {offer.get('unit', 'per month')}. "
                 "How does that sound?")
     return "We'd like to make you an offer at the midpoint of our band for this role. How does that sound?"
@@ -265,12 +279,15 @@ def kind_feedback(kind: str, question: str, answer: str, job: dict, offer: dict 
 # prep plan + research brief
 # ---------------------------------------------------------------------------
 
+_NOT_STACK = {"Education", "English", "Spanish", "French", "Agile", "Scrum", "Insurance", "Underwriting", "Claims", "Accounting"}
+
+
 def research_brief(job: dict, required_skills: list[str]) -> dict:
     desc = job.get("description") or ""
     sents = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", desc))
     about = [s for s in sents if re.search(r"\b(we are|we're|our mission|founded|leading|our clients|we help|we build|we provide|headquartered)\b", s, re.I)][:3]
     values = sorted({m.lower() for m in re.findall(r"\b(ownership|collaborat\w*|curios\w*|customer[- ]first|integrity|innovation|diversity|inclusion|impact|transparen\w*|autonomy|quality|agile|fast-paced)\b", desc, re.I)})
-    stack = sorted(tax.find_skills(desc))[:12]
+    stack = sorted(s for s in tax.find_skills(desc) if s not in tax.SOFT and s not in _NOT_STACK)[:12]
     company = job.get("company") or "the company"
     questions = [f"What does success look like in the first 90 days for this {job.get('title') or 'role'}?",
                  "What's the biggest challenge the team is facing right now?",

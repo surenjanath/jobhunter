@@ -3,14 +3,28 @@
 
 {% block page %}
       <section class="sheet" id="interviewCard">
-        <h1 class="sheet-title">Interview <span class="quiet">· Mock, out loud ·</span></h1>
-        <p class="quiet">A full mock interview for one of your roles. The interviewer reads each question aloud, you answer by speaking,
-          and at the end you get a report on what you said (structure, specifics, numbers) and how you said it (pace, tone, pauses, volume).
-          Voice analysis runs in your browser. No audio is uploaded or stored, only summary numbers.</p>
-        <div id="ivBody"></div>
+        <h1 class="sheet-title">Interview <span class="quiet">· Practise, prepare, follow up ·</span></h1>
+        <nav class="iv-tabs" id="ivTabs" aria-label="Interview sections">
+          <button type="button" data-tab="practice" class="on">Practice</button>
+          <button type="button" data-tab="stories">Stories</button>
+          <button type="button" data-tab="drills">Drills <span class="iv-badge" id="ivDueBadge" hidden></span></button>
+          <button type="button" data-tab="real">Real interviews <span class="iv-badge" id="ivInboxBadge" hidden></span></button>
+          <button type="button" data-tab="progress">Progress</button>
+        </nav>
+        <div data-pane="practice">
+          <p class="quiet">A full mock interview for one of your roles. The interviewer reads each question aloud, you answer by speaking,
+            and you get an honest report on what you said and how you said it, including nerves. Voice and camera analysis run in
+            your browser: no audio or video is uploaded or stored, only summary numbers.</p>
+          <div id="ivBody"></div>
+        </div>
+        <div data-pane="stories" hidden><div id="csStories"></div></div>
+        <div data-pane="drills" hidden><div id="csDrills"></div></div>
+        <div data-pane="real" hidden><div id="csReal"></div></div>
+        <div data-pane="progress" hidden><div id="csProgress"></div></div>
       </section>
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/interview.js' %}?v=8"></script>
+<script src="{% static 'js/interview.js' %}?v=11"></script>
+<script src="{% static 'js/coach.js' %}?v=4"></script>
 {% endblock %}
