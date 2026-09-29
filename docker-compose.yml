@@ -2,7 +2,7 @@ services:
   jobhunter:
     build: .
     ports:
-      - "127.0.0.1:8000:8000"          # localhost only: this app has no login
+      - "127.0.0.1:8000:8000"          # localhost only by default; set DJANGO_ALLOWED_HOSTS (and DJANGO_DEBUG=0) to expose it
     environment:
       DJANGO_ALLOWED_HOSTS: "127.0.0.1,localhost"
       JOBHUNT_DB: /data/jobhunt.db

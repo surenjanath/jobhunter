@@ -30,6 +30,31 @@ _pipeline = None
 _pipeline_lock = threading.Lock()
 _VOICE_BY_LANG = {"a": ("af_heart", "am_michael"), "b": ("bf_emma", "bm_george")}
 DEFAULT_VOICE = "af_heart"
+VOICES = frozenset(v for pair in _VOICE_BY_LANG.values() for v in pair)
+CACHE_MAX_FILES = 400     # every interview result is unique text: without a cap the cache grows forever
+
+
+def safe_voice(voice: str | None) -> str:
+    """Only known voice names reach Kokoro (it would otherwise try to load an arbitrary name as a voice file)."""
+    return voice if voice in VOICES else DEFAULT_VOICE
+
+
+def safe_speed(speed) -> float:
+    try:
+        s = float(speed)
+    except (TypeError, ValueError):
+        return 1.05
+    return min(1.6, max(0.6, s)) if s == s else 1.05   # s == s is False for NaN
+
+
+def prune_cache(keep: int = CACHE_MAX_FILES) -> int:
+    """Drop the least recently used clips beyond `keep`. Returns how many were removed."""
+    if not CACHE_DIR.exists():
+        return 0
+    files = sorted((p for p in CACHE_DIR.iterdir() if p.suffix in (".mp3", ".wav")), key=lambda p: p.stat().st_mtime, reverse=True)
+    for p in files[keep:]:
+        p.unlink(missing_ok=True)
+    return max(0, len(files) - keep)
 
 
 class VoiceUnavailable(RuntimeError):
@@ -83,12 +108,15 @@ def synthesize(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.05) -> by
     Raises VoiceUnavailable if Kokoro isn't installed; callers fall back to text-only (see ai/views.py)."""
     if not available():
         raise VoiceUnavailable("Kokoro is not installed — pip install kokoro soundfile numpy")
+    voice, speed = safe_voice(voice), safe_speed(speed)
     text = clean_for_speech(text)
     if not text:
         raise VoiceUnavailable("nothing to say")
     path = _cache_path(text, voice, speed)
     if path.exists():
+        path.touch()   # recently used: keep it when pruning
         return path.read_bytes()
+    prune_cache(CACHE_MAX_FILES - 1)
     import subprocess
     import numpy as np
     import soundfile as sf
@@ -110,6 +138,7 @@ def synthesize(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.05) -> by
 
 def synthesized_content_type(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.05) -> tuple[bytes, str]:
     """Like synthesize(), but also reports whether it actually got mp3 or had to fall back to wav."""
+    voice, speed = safe_voice(voice), safe_speed(speed)
     path = _cache_path(clean_for_speech(text), voice, speed)
     data = synthesize(text, voice, speed)
     ct = "audio/mpeg" if path.exists() else "audio/wav"

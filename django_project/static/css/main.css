@@ -46,8 +46,8 @@ a:hover,button.text:hover{text-decoration:underline;text-underline-offset:3px}
 #banners,#backends{display:none}
 .banner{padding:2px 0}
 
-.frame{flex:1;display:flex;align-items:center;gap:28px;width:min(1180px,100%);margin:0 auto}
-.rail{width:84px;flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mute);text-align:center;font-size:13px;line-height:1.25}
+.frame{flex:1;display:flex;align-items:flex-start;gap:28px;width:min(1180px,100%);margin:0 auto}   /* top-aligned: centring made short pages float mid-screen and jump as content loaded */
+.rail{align-self:center;width:84px;flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mute);text-align:center;font-size:13px;line-height:1.25}
 .rail[hidden]{display:none}
 .tri{width:34px;height:30px;display:block;color:var(--ink)}
 .sheets{flex:1;min-width:0}
@@ -464,3 +464,16 @@ mark.hl.have{background:rgba(127,127,120,.18)}
 #csStories .spacer{flex:1}
 #csDrills button.sm,#csReal button.sm,#csStories button.sm{border:1px solid var(--rule);padding:2px 10px}
 @media print{.iv-tabs{display:none}}
+/* interview tabs on phones: wide tables scroll inside themselves, the tab row scrolls instead of wrapping */
+@media(max-width:700px){
+  #interviewCard table{display:block;overflow-x:auto;white-space:nowrap}
+  #interviewCard table td:first-child{white-space:normal;min-width:180px}
+  .iv-tabs{flex-wrap:nowrap;overflow-x:auto;gap:14px}
+  .iv-tabs button{white-space:nowrap}
+  .iv-head{flex-wrap:wrap}
+  .iv-campreview{width:72px;height:54px}
+  .cs-sug{flex-direction:column}
+  .iv-setup select,#csReal select,#csReal input{max-width:100%}
+  .iv-log{max-height:52vh;padding:10px}
+  .iv-answer .actions,.iv-report .actions{gap:8px}
+}

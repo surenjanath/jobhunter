@@ -278,11 +278,8 @@ def speak(request):
     if not text:
         return Response({"error": "text required"}, status=400)
     v = _voice()
-    voice_name = request.GET.get("voice") or v.DEFAULT_VOICE
-    try:
-        speed = float(request.GET.get("speed") or 1.05)
-    except ValueError:
-        speed = 1.05
+    voice_name = v.safe_voice(request.GET.get("voice"))
+    speed = v.safe_speed(request.GET.get("speed") or 1.05)
     try:
         data, content_type = v.synthesized_content_type(text, voice_name, speed)
     except v.VoiceUnavailable as e:

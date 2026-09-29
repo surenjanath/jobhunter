@@ -520,11 +520,16 @@ def state(request):
             jobs = [queries.serialize(j, status_map.get(j.job_id), match_map.get(j.job_id)) for j in page]
         except Exception:
             pass
+        # Every page loads this and polls it every 20s; the full posting text was ~86% of the payload (1.7 MB for 340
+        # jobs) and nothing in the list views reads it — the job dialog fetches /api/jobs/<id>/ for that. ?full=1 keeps it.
+        light = request.GET.get("full") not in ("1", "true")
         # Fallback to JSON file if DB empty
         if not jobs:
             p = ROOT / "output" / "jobs_latest.json"
             if p.exists():
                 jobs = json.loads(p.read_text())
+        if light:
+            jobs = [{k: v for k, v in j.items() if k != "description"} for j in jobs]
         generated = None
         try:
             p = ROOT / "output" / "jobs_latest.json"

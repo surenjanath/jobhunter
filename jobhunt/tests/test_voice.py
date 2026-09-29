@@ -18,6 +18,20 @@ sys.path.insert(0, str(ROOT))
 
 
 def run(check, cfg):
+    from src import voice as _v
+    check("voice: unknown voice name never reaches Kokoro", _v.safe_voice("../../etc/passwd") == _v.DEFAULT_VOICE and _v.safe_voice("bm_george") == "bm_george")
+    check("voice: speed clamped, NaN/inf/garbage -> sane", _v.safe_speed("inf") == 1.6 and _v.safe_speed("nan") == 1.05 and _v.safe_speed("x") == 1.05 and _v.safe_speed(0.1) == 0.6)
+    import tempfile, os, time
+    from pathlib import Path
+    old = _v.CACHE_DIR
+    with tempfile.TemporaryDirectory() as tmp:
+        _v.CACHE_DIR = Path(tmp)
+        for n in range(8):
+            p = _v.CACHE_DIR / f"{n}.mp3"; p.write_bytes(b"x"); os.utime(p, (time.time() + n, time.time() + n))
+        removed = _v.prune_cache(keep=5)
+        left = sorted(p.name for p in _v.CACHE_DIR.iterdir())
+        check("voice: cache pruned to the most recently used", removed == 3 and left == ["3.mp3", "4.mp3", "5.mp3", "6.mp3", "7.mp3"], left)
+    _v.CACHE_DIR = old
     print("\n12. VOICE (Kokoro text-to-speech, optional)")
     from src import ai_features as ai
     from src import voice

@@ -21,8 +21,33 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# Local tool: a fixed development key is fine on localhost. Set DJANGO_SECRET_KEY if you expose the app.
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-local-development-key-change-me')
+# The app has accounts (passwords, sessions), so the key signing session cookies must never be a value that is
+# published in this repository. DJANGO_SECRET_KEY wins; otherwise a random key is generated once and kept next to
+# the Django database (owner-only permissions), so sessions survive restarts and every install has its own key.
+def _secret_key() -> str:
+    if os.environ.get('DJANGO_SECRET_KEY'):
+        return os.environ['DJANGO_SECRET_KEY']
+    import secrets
+    db = os.environ.get('JOBHUNTER_DJANGO_DB')
+    path = Path(db).parent / '.django_secret_key' if db else BASE_DIR / '.django_secret_key'
+    try:
+        key = path.read_text().strip()
+        if len(key) >= 50:
+            return key
+    except OSError:
+        pass
+    key = secrets.token_urlsafe(64)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w') as f:
+            f.write(key)
+    except OSError:
+        pass   # read-only filesystem: a per-process random key still beats a published one (sessions reset on restart)
+    return key
+
+
+SECRET_KEY = _secret_key()
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', '1') not in ('0', 'false', 'False', '')
@@ -53,6 +78,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # compress JSON (the /api/state/ poll is sent every 20s) and answer an unchanged repeat with 304 Not Modified.
+    # Django's GZip adds random padding to each response (mitigates BREACH on pages that carry the CSRF token).
+    'django.middleware.gzip.GZipMiddleware',
+    'django.middleware.http.ConditionalGetMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

@@ -97,3 +97,27 @@ class SettingsStoreTests(TestCase):
         )
         self.assertEqual(r.status_code, 200)
         self.assertIn("application/json", r.get("Content-Type", ""))
+
+
+from jobs.testutil import ScannerDBTestCase  # noqa: E402
+
+
+class StatePayloadTests(ScannerDBTestCase):
+    """/api/state/ is loaded by every page and polled every 20s: keep it light, compressed and cacheable."""
+    def test_state_leaves_out_descriptions_unless_asked(self):
+        self.make_job("s1", title="Payroll Clerk", description="Long posting text " * 200)
+        light = self.client.get("/api/state/").json()["jobs"][0]
+        self.assertNotIn("description", light)
+        self.assertEqual(light["title"], "Payroll Clerk")
+        full = self.client.get("/api/state/?full=1").json()["jobs"][0]
+        self.assertTrue(full["description"].startswith("Long posting text"))
+        # the job dialog still gets the full text from the detail endpoint
+        self.assertIn("Long posting text", self.client.get("/api/jobs/s1/").json()["job"]["description"])
+
+    def test_state_is_gzipped_and_supports_304(self):
+        self.make_job("s2", title="Analyst", description="x" * 5000)
+        r = self.client.get("/api/state/", HTTP_ACCEPT_ENCODING="gzip")
+        self.assertEqual(r["Content-Encoding"], "gzip")
+        etag = r["ETag"]
+        again = self.client.get("/api/state/", HTTP_IF_NONE_MATCH=etag)
+        self.assertEqual(again.status_code, 304)

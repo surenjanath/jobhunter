@@ -5,6 +5,7 @@ Pure function. Views attach likelihood, then this shapes the page.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 
 
@@ -25,6 +26,21 @@ BLOCKER = (
     "permanent residency",
     "no sponsorship",
 )
+
+
+def gap_advice(gap: str) -> str:
+    """What to actually do about the most common gap — it depends on the kind of gap."""
+    m = re.match(r"No (.+?) on your resume", gap)
+    if m:
+        return (f"If you've used {m.group(1)}, add it to your resume and re-score; if you haven't, "
+                f"it's the skill to learn next (Analytics shows how many roles it would unlock).")
+    if gap.startswith("Asks for"):
+        return "Check your years of experience are read correctly on the Profile page; if they are, favour roles at your level."
+    if "target roles" in gap:
+        return "Tighten your search terms in Settings, or add the titles you'd genuinely accept to your targets."
+    if "relocation" in gap.lower() or "outside Trinidad" in gap:
+        return "Filter to Local or Remote on the Ledger, or hide blockers, to focus on roles you can take."
+    return f"Look at the best-fit roles with “{gap}” and decide whether it's fixable on your resume."
 
 
 def _like(job: dict) -> dict:
@@ -110,8 +126,11 @@ def build_brief(jobs: list[dict] | None, *, letters: int = 0, generated: str | N
         })
     source_rows.sort(key=lambda r: (r["avg"], r["count"]), reverse=True)
 
+    # count gaps only among roles worth pursuing: across every listing, "Title is outside your target roles" always
+    # wins (most scraped jobs aren't yours) and says nothing about what to do next
+    relevant = [j for j in ranked if int(j.get("fit_score") or 0) >= 50] or ranked
     gap_counts: dict[str, int] = {}
-    for job in ranked:
+    for job in relevant:
         for gap in _like(job).get("gaps") or []:
             key = gap.split(" —")[0].split(" (")[0].strip()
             if key:
@@ -151,9 +170,10 @@ def build_brief(jobs: list[dict] | None, *, letters: int = 0, generated: str | N
         warning_on = True
         nxt_action = "Hide blockers, then apply to the highest open role."
     elif top_gap:
-        warning = f"Repeating gap across this scan: {top_gap}."
+        n_gap = gap_counts[top_gap]
+        warning = f"Repeating gap in {n_gap} of your {len(relevant)} best-fit roles: {top_gap}."
         warning_on = True
-        nxt_action = f"Close “{top_gap}” on the resume, then re-score."
+        nxt_action = gap_advice(top_gap)
     else:
         warning = "No hard blockers in the current cut."
         warning_on = False

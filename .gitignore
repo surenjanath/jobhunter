@@ -28,6 +28,7 @@ django_project/staticfiles/
 .env.*
 !.env.example
 service_account.json
+.django_secret_key
 *-key.json
 credentials.json
 

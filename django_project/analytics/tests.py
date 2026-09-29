@@ -150,3 +150,14 @@ class ActivityTests(TestCase):
         listed = self.client.get("/api/activity", follow=True)
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(json.loads(listed.content)["events"][0]["to_status"], "Shortlisted")
+
+
+class GapAdviceTests(TestCase):
+    """The Conditions page's 'next action' for the most common gap must be something the person can actually do."""
+    def test_advice_depends_on_the_kind_of_gap(self):
+        from analytics.station import gap_advice
+        self.assertIn("add it to your resume", gap_advice("No Docker on your resume"))
+        self.assertIn("learn next", gap_advice("No Docker on your resume"))
+        self.assertIn("Profile", gap_advice("Asks for 7+ years; your resume shows 6.3"))
+        self.assertIn("Settings", gap_advice("Title is outside your target roles"))
+        self.assertNotIn("on the resume, then re-score", gap_advice("Title is outside your target roles"))
