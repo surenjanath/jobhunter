@@ -10,8 +10,13 @@ let SETTINGS={preferences:{show_remote:true,remote_only:false,show_links:true,sh
 const PAGE=document.body.dataset.page||'home';
 
 // ---- fetch + formatting ---------------------------------------------------------------------------------------------
+// Every request carries the session cookie, and every unsafe one carries Django's CSRF token — invisible while
+// anonymous (nobody has a session yet), required the moment someone is signed in.
+function csrfToken(){ return (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/)||[])[1]||''; }
 // Always JSON, never a cryptic "Unexpected token '<'": a non-JSON reply becomes a readable error.
 async function jfetch(url, opts){
+  opts=opts||{};
+  if(opts.method && opts.method!=='GET'){ opts.headers={'X-CSRFToken':csrfToken(),...(opts.headers||{})}; }
   const r=await fetch(url, opts);
   const ct=r.headers.get('content-type')||'';
   if(!ct.includes('application/json')){

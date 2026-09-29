@@ -35,7 +35,33 @@ def _public_profile(p: dict) -> dict:
     }
 
 
-def _state() -> dict:
+def _account_state(user) -> dict:
+    """_state()'s shape, sourced from this account's own UserProfile instead of the shared instance profile."""
+    from accounts.context import DEFAULT_PREFS, priors_for_user
+    from src import llm, profile_store, retrieval
+    up = user.profile
+    prefs = {**DEFAULT_PREFS(), **(up.preferences or {})}
+    try:
+        providers = {k: v.get("available", False) for k, v in llm.describe().items()}
+    except Exception:
+        providers = {}
+    chunks = retrieval.chunk_profile(up.resume_text or "", up.data) if up.resume_text else []
+    status = {"has_resume": bool(up.data), "resume_id": 0, "filename": up.resume_filename,
+             "chunks": len(chunks), "semantic": False, "embedding_model_index": "",
+             "embedding_model_available": retrieval.embedding_model()}
+    return {
+        "status": status,
+        "profile": _public_profile(up.data) if up.data else None,
+        "prefs": prefs, "work_modes": list(profile_store.WORK_MODES),
+        "calibration": priors_for_user(user, prefs),
+        "versions": [{"id": 0, "filename": up.resume_filename, "active": True, "created_at": up.created_at.isoformat()}] if up.data else [],
+        "llm_providers": providers, "own_profile": True,
+    }
+
+
+def _state(request=None) -> dict:
+    if request is not None and request.user.is_authenticated and hasattr(request.user, "profile") and request.user.profile.data:
+        return _account_state(request.user)
     calibration, matching, profile_store, resume_parse, retrieval = _imports()
     prof = profile_store.active_profile()
     from src import llm
@@ -51,6 +77,7 @@ def _state() -> dict:
         "calibration": calibration.priors(),
         "versions": profile_store.list_versions(),
         "llm_providers": providers,
+        "own_profile": False, "signed_in": bool(request and request.user.is_authenticated),
     }
 
 
@@ -59,7 +86,7 @@ def profile(request):
     try:
         _, _, profile_store, *_ = _imports()
         profile_store.bootstrap_if_empty()
-        return Response(_state())
+        return Response(_state(request))
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
@@ -67,7 +94,9 @@ def profile(request):
 @api_view(["POST"])
 @parser_classes([MultiPartParser, FormParser, JSONParser])
 def upload_resume(request):
-    """Upload a resume: multipart `file` (PDF/DOCX/MD/TXT) or JSON {"text": "...", "filename": "cv.md"}."""
+    """Upload a resume: multipart `file` (PDF/DOCX/MD/TXT) or JSON {"text": "...", "filename": "cv.md"}.
+    Signed in: becomes this account's own private profile (immediately rescored against every stored job).
+    Signed out: the shared instance-wide profile, as before."""
     calibration, matching, profile_store, resume_parse, retrieval = _imports()
     try:
         f = request.FILES.get("file")
@@ -80,9 +109,24 @@ def upload_resume(request):
             if not text:
                 return Response({"error": "send a file, or JSON with text"}, status=400)
             data, name = text, str(request.data.get("filename") or "pasted-resume.txt")
+
+        if request.user.is_authenticated:
+            text = resume_parse.normalise(data) if isinstance(data, str) else resume_parse.extract_text(data, name)
+            if isinstance(data, str) and len(text) < 80:
+                return Response({"error": "resume text is too short"}, status=400)
+            parsed = resume_parse.parse_resume(text)
+            from accounts.context import invalidate, rescore_user
+            from accounts.models import UserProfile
+            UserProfile.objects.update_or_create(user=request.user, defaults={
+                "data": parsed, "resume_text": text, "resume_filename": name[:200]})
+            invalidate(request.user)
+            rescored = rescore_user(request.user)
+            return Response({"ok": True, "import": {"skills_found": len(parsed.get("skills", {})), "filename": name[:200]},
+                             "rescored": rescored, **_state(request)}, status=201)
+
         summary = profile_store.import_resume(data, name, source="upload", embed=request.data.get("embed", "true") != "false")
         matching.reset_context()
-        return Response({"ok": True, "import": summary, **_state()}, status=201)
+        return Response({"ok": True, "import": summary, **_state(request)}, status=201)
     except resume_parse.ResumeError as e:
         return Response({"error": str(e)}, status=400)
     except Exception as e:
@@ -107,8 +151,23 @@ def overrides(request):
 
 @api_view(["GET", "PUT", "PATCH"])
 def prefs(request):
-    """Search preferences: work_mode (both|local_first|remote_first|local_only|remote_only), salary floors, regions…"""
+    """Search preferences: work_mode (both|local_first|remote_first|local_only|remote_only), salary floors, regions…
+    Signed in with an account profile: this account's own (and re-scores it, since preferences affect fit)."""
     calibration, matching, profile_store, *_ = _imports()
+    if request.user.is_authenticated and hasattr(request.user, "profile") and request.user.profile.data:
+        from accounts.context import DEFAULT_PREFS, invalidate, rescore_user
+        up = request.user.profile
+        if request.method == "GET":
+            return Response({"prefs": {**DEFAULT_PREFS(), **(up.preferences or {})}, "work_modes": list(profile_store.WORK_MODES)})
+        try:
+            out = profile_store.validate_prefs(request.data or {})
+        except (ValueError, TypeError) as e:
+            return Response({"error": str(e)}, status=400)
+        up.preferences = {**(up.preferences or {}), **out}
+        up.save(update_fields=["preferences", "updated_at"])
+        invalidate(request.user)
+        rescore_user(request.user)
+        return Response({"ok": True, "prefs": {**DEFAULT_PREFS(), **up.preferences}})
     if request.method == "GET":
         return Response({"prefs": profile_store.get_prefs(), "work_modes": list(profile_store.WORK_MODES)})
     try:
@@ -201,7 +260,13 @@ def _run_rescore():
 
 @api_view(["GET", "POST"])
 def rescore(request):
-    """POST starts a background re-score of every stored job (add {"wait": true} to block); GET reports progress."""
+    """POST starts a background re-score of every stored job (add {"wait": true} to block); GET reports progress.
+    Signed in with an account profile: scores against this account's own resume only (synchronous — a few
+    thousand jobs takes well under a second) and never touches the shared instance-wide scores."""
+    if request.user.is_authenticated and hasattr(request.user, "profile") and request.user.profile.data:
+        from accounts.context import rescore_user
+        n = rescore_user(request.user)
+        return Response({"ok": True, "rescored": n, "done": n, "total": n, "running": False, "error": ""})
     if request.method == "GET":
         with _rescore_lock:
             return Response(dict(_rescore))
@@ -227,19 +292,32 @@ def job_match(request, job_id):
         job = Job.objects.using("jobhunt").get(pk=job_id)
     except Job.DoesNotExist:
         return Response({"error": "not found"}, status=404)
-    ctx = matching.get_context({"targets": _targets()})
+    from accounts.context import matching_context
+    ctx = matching_context(request)
     if not ctx:
         return Response({"error": "add a resume first (Profile tab)"}, status=409)
-    stored = {}
-    try:
-        stored = json.loads(job.match_json) if job.match_json else {}
-    except ValueError:
-        pass
+    from accounts.context import overlay_for
+    from jobs.queries import UNSET
+    _, match_map = overlay_for(request, [job_id])
+    own = match_map.get(job_id)
+    if own and own is not UNSET:
+        fit_score, stored = own.fit_score, (json.loads(own.match_json) if own.match_json else {})
+    else:
+        fit_score = job.fit_score
+        try:
+            stored = json.loads(job.match_json) if job.match_json else {}
+        except ValueError:
+            stored = {}
     d = {"job_id": job.job_id, "title": job.title, "company": job.company, "location": job.location, "remote": bool(job.remote),
          "salary": job.salary, "description": job.description, "region": job.region, "posted_at": job.posted_at,
          "first_seen": job.first_seen, "flags": job.flags,
-         "fit_score": job.fit_score, "kw_fit": stored.get("fit_keyword", job.fit_score)}   # keyword pass, not the blended score
+         "fit_score": fit_score, "kw_fit": stored.get("fit_keyword", fit_score)}   # keyword pass, not the blended score
     m = matching.evaluate(d, ctx, deep=True)
+    if request.user.is_authenticated:
+        from accounts.models import UserJobMatch
+        UserJobMatch.objects.update_or_create(user=request.user, job_id=job_id, defaults={
+            "fit_score": m["fit"], "likelihood": m["likelihood"], "interview_chance": m["interview_chance"],
+            "match_json": matching.compact(m)})
     return Response({"ok": True, "match": m, "profile_years": ctx["years"], "resume": ctx["profile"].get("_filename", ""),
                      "rank": _rank(job, m), "pool": _pool(),
                      "highlights": matching.highlight_terms(job.description, m["skills"]["items"])})

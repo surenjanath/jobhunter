@@ -175,38 +175,87 @@ def fit_keyword(job: Job):
         return None
 
 
-def _likelihood(job: Job):
-    """{likelihood, verdict, interview_chance, advice, blockers…} from the stored profile match (None if never scored)."""
-    if not job.match_json:
+def _likelihood_from(match_json: str, likelihood_score: int, interview_chance: int):
+    if not match_json:
         return None
     try:
-        m = json.loads(job.match_json)
+        m = json.loads(match_json)
     except ValueError:
         return None
-    return {"likelihood": job.likelihood, "verdict": m.get("verdict") or verdict(job.likelihood),
-            "interview_chance": job.interview_chance, "advice": m.get("advice", ""), "blockers": m.get("blockers", []),
+    return {"likelihood": likelihood_score, "verdict": m.get("verdict") or verdict(likelihood_score),
+            "interview_chance": interview_chance, "advice": m.get("advice", ""), "blockers": m.get("blockers", []),
             "confidence": m.get("confidence", ""), "fit_profile": m.get("fit_profile"), "fit_keyword": m.get("fit_keyword")}
 
 
-def serialize(job: Job) -> dict:
+def _likelihood(job: Job):
+    """{likelihood, verdict, interview_chance, advice, blockers…} from the stored profile match (None if never scored)."""
+    return _likelihood_from(job.match_json, job.likelihood, job.interview_chance)
+
+
+def _tier_for(fit: int) -> str:
+    return "Tier 1 — apply" if fit >= 65 else "Tier 2 — strong maybe" if fit >= 50 else "Maybe — skim it" if fit >= 35 else "Low"
+
+
+def _why_from(match_json: str) -> str:
+    try:
+        m = json.loads(match_json) if match_json else {}
+    except ValueError:
+        m = {}
+    have = [s["name"] for s in (m.get("skills") or {}).get("matched", []) if s.get("kind") != "nice"][:4]
+    bits = []
+    if ((m.get("breakdown") or {}).get("title") or 0) >= 75:
+        bits.append("title matches your targets")
+    if have:
+        bits.append("you have " + ", ".join(have))
+    missing = (m.get("skills") or {}).get("missing_required") or []
+    if missing:
+        bits.append("missing " + ", ".join(missing[:2]))
+    return "; ".join(bits) or "limited overlap"
+
+
+UNSET = object()   # "no override was even asked for" — distinct from None ("asked for one, this account has none yet")
+
+
+def serialize(job: Job, user_status=UNSET, user_match=UNSET) -> dict:
+    """user_status/user_match: this account's own UserJobStatus/UserJobMatch row for this job, when signed in.
+
+    Leave both at their default (UNSET) for a guest request — the shared scanner-db data is used, exactly as
+    before accounts existed. A signed-in request must pass both explicitly (accounts.context.overlay_for's
+    dicts do this automatically via .get()), even when that means passing `None`: for user_status specifically,
+    `None` means "this account has never touched this job" and renders as New/unstarred/no notes — it must NEVER
+    fall back to the shared app_status row, or a brand new account would appear to inherit a stranger's (or the
+    shared instance's) star, notes and pipeline status. user_match's `None` falls back to the shared fit/odds
+    instead, which is fine — a computed score isn't private the way pipeline tracking is, and it's a sensible
+    default until the account's first rescore finishes. `flags` is left as the shared value either way — see
+    docs/ACCOUNTS.md."""
     try:
         st = job.applicationstatus
     except Exception:
         st = None
+    if user_match and user_match is not UNSET:
+        fit_score, likelihood_score, interview_chance, match_json = (
+            user_match.fit_score, user_match.likelihood, user_match.interview_chance, user_match.match_json)
+        tier, why = _tier_for(fit_score), _why_from(match_json)
+    else:
+        fit_score, likelihood_score, interview_chance, match_json = job.fit_score, job.likelihood, job.interview_chance, job.match_json
+        tier, why = job.tier, job.why
+    us = st if user_status is UNSET else user_status
     return {
         "job_id": job.job_id, "source": job.source, "title": job.title, "company": job.company,
         "location": job.location, "remote": bool(job.remote), "salary": job.salary, "url": job.url,
-        "description": job.description, "posted_at": job.posted_at, "fit_score": job.fit_score,
-        "tier": job.tier, "why": job.why, "flags": job.flags, "alt_urls": job.alt_urls,
+        "description": job.description, "posted_at": job.posted_at, "fit_score": fit_score,
+        "tier": tier, "why": why, "flags": job.flags, "alt_urls": job.alt_urls,
         "seen_on": job.seen_on, "first_seen": job.first_seen,
         "region": job.region, "category": job.category, "expires_at": job.expires_at,
-        "likelihood": _likelihood(job), "likelihood_score": job.likelihood, "interview_chance": job.interview_chance,
-        "work_mode": job.work_mode, "remote_scope": job.remote_scope, "has_match": bool(job.match_json),
+        "likelihood": _likelihood_from(match_json, likelihood_score, interview_chance), "likelihood_score": likelihood_score,
+        "interview_chance": interview_chance,
+        "work_mode": job.work_mode, "remote_scope": job.remote_scope, "has_match": bool(match_json),
         "days_left": days_left(job.expires_at),
-        "app_status": (st.status if st else "New") or "New",
-        "starred": bool(st.starred) if st else False,
-        "followup_date": (st.followup_date if st else "") or "",
-        "notes": (st.notes if st else "") or "",
-        "applied_date": (st.applied_date if st else "") or "",
-        "dismiss_reason": (st.dismiss_reason if st else "") or "",
+        "app_status": (us.status if us else "New") or "New",
+        "starred": bool(us.starred) if us else False,
+        "followup_date": (us.followup_date if us else "") or "",
+        "notes": (us.notes if us else "") or "",
+        "applied_date": (us.applied_date if us else "") or "",
+        "dismiss_reason": (us.dismiss_reason if us else "") or "",
+        "personalized": user_status is not UNSET or user_match is not UNSET,
     }

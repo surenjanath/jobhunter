@@ -22,6 +22,10 @@ function paintProfile(){
   const S=PROFILE, P=S.profile, st=S.status, el=$('#resumeBody');
   if(!el) return;
   const stale=PROFILE_STALE?`<div class="banner"><b>Your profile or preferences changed.</b> Scores are from before that. <button type="button" class="go sm" id="pfRescore">Re-score all jobs</button></div>`:'';
+  const acct=!S.own_profile
+    ? (P ? `<div class="banner g"><b>${AUTH.authenticated?'This is the shared instance profile.':'You’re trying this anonymously.'}</b> ${AUTH.authenticated?'Upload a resume below and it becomes private to your account instead.':'Like what you see? <button type="button" class="text" id="pfCreateAccount">Create a free account</button> to save this resume, its fit scores and your pipeline — and keep them private to you.'}</div>`
+       : '')
+    : '';
   const sem=st.semantic?`Semantic + keyword retrieval (${esc(st.embedding_model_index)})`:'Keyword retrieval (BM25)';
   const hint=!st.semantic?(st.embedding_model_available
       ?` An embedding model is installed (<b>${esc(st.embedding_model_available)}</b>) — <button type="button" class="text" id="pfReindex">index with it</button>.`
@@ -47,7 +51,7 @@ function paintProfile(){
   const llm=P.llm;
   const provs=Object.entries(S.llm_providers||{}).filter(([k,v])=>v&&k!=='template').map(([k])=>`<option value="${esc(k)}">${esc(k)}</option>`).join('');
 
-  el.innerHTML=`${stale}
+  el.innerHTML=`${acct}${stale}
     <div class="figures">
       <div><div class="quiet">Experience</div><div class="mid-num">${P.years_experience}<span class="quiet"> yrs</span></div></div>
       <div><div class="quiet">Level</div><div class="mid-num" style="font-size:22px">${esc(P.seniority||'—')}</div></div>
@@ -115,6 +119,7 @@ async function pfPost(url,body,method='POST'){ return jfetch(url,{method,headers
 function markStale(){ PROFILE_STALE=true; paintProfile(); }
 
 function wireProfile(){
+  const ca=$('#pfCreateAccount'); if(ca) ca.onclick=()=>openAuthDlg('register');
   const drop=$('#pfDrop'), file=$('#pfFile');
   if(file) file.onchange=()=>{ if(file.files[0]) doUpload(file.files[0]); };
   if(drop){

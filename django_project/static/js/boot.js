@@ -3,6 +3,7 @@
 (async function boot(){
   const start=async()=>{
     wireShell();
+    loadAuth();   // not awaited: the header updates when it resolves, nothing else waits on sign-in state
     try{ SETTINGS=await jfetch('/api/settings/'); }catch(e){ /* defaults */ }
     if(PAGE_HOOKS.beforeLoad) await PAGE_HOOKS.beforeLoad();
     let d=null;

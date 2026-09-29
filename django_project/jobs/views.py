@@ -103,7 +103,10 @@ def job_list(request):
         page = paginator.paginate_queryset(qs, request)
     except Exception as e:  # e.g. missing table on a fresh install — always JSON
         return Response({"error": f"db error: {e}"}, status=500)
-    return paginator.get_paginated_response([queries.serialize(j) for j in page])
+    from accounts.context import overlay_for
+    status_map, match_map = overlay_for(request, [j.job_id for j in page])
+    return paginator.get_paginated_response(
+        [queries.serialize(j, status_map.get(j.job_id), match_map.get(j.job_id)) for j in page])
 
 
 @api_view(["GET"])
@@ -126,7 +129,8 @@ def job_export(request):
 
 @api_view(["POST"])
 def bulk_status(request):
-    """{"job_ids": [...], "status": "Applied"} — move many jobs at once."""
+    """{"job_ids": [...], "status": "Applied"} — move many jobs at once. Signed in: writes to this account's own
+    pipeline only (UserJobStatus); signed out: the shared instance-wide one (ApplicationStatus), as before."""
     from django.utils import timezone
     from .models import ApplicationStatus
     ids = request.data.get("job_ids")
@@ -135,13 +139,23 @@ def bulk_status(request):
         return Response({"error": "job_ids (list) and status required"}, status=400)
     if len(ids) > 500:
         return Response({"error": "max 500 jobs per request"}, status=400)
+    reason = request.data.get("dismiss_reason")
+    if request.user.is_authenticated:
+        from accounts.context import set_status
+        done = 0
+        for job in Job.objects.using("jobhunt").filter(pk__in=ids).values_list("job_id", flat=True):
+            fields = {"status": status_val}
+            if reason is not None:
+                fields["dismiss_reason"] = reason
+            set_status(request.user, job, **fields)
+            done += 1
+        return Response({"ok": True, "updated": done, "status": status_val})
     now = timezone.now().isoformat()
     done = 0
     for job in Job.objects.using("jobhunt").filter(pk__in=ids):
         st = ApplicationStatus.objects.using("jobhunt").filter(pk=job.job_id).first()
         prev = (st.status if st else "New") or "New"
         defaults = {"status": status_val, "updated_at": now}
-        reason = request.data.get("dismiss_reason")
         if reason is not None:
             defaults["dismiss_reason"] = reason
         elif status_val != "Passed on it":
@@ -159,12 +173,20 @@ def bulk_status(request):
 
 @api_view(["POST"])
 def job_star(request, job_id):
-    """Toggle (or set with {"starred": true|false}) the star on a job."""
+    """Toggle (or set with {"starred": true|false}) the star on a job — private to this account when signed in."""
     from django.utils import timezone
     from .models import ApplicationStatus
     if not Job.objects.using("jobhunt").filter(pk=job_id).exists():
         return Response({"error": "not found"}, status=404)
     want = request.data.get("starred") if isinstance(request.data, dict) else None
+    if request.user.is_authenticated:
+        from accounts.models import UserJobStatus
+        cur = UserJobStatus.objects.filter(user=request.user, job_id=job_id).first()
+        if want is None:
+            want = not (cur.starred if cur else False)
+        from accounts.context import set_status
+        set_status(request.user, job_id, starred=bool(want))
+        return Response({"ok": True, "job_id": job_id, "starred": bool(want)})
     st = ApplicationStatus.objects.using("jobhunt").filter(pk=job_id).first()
     if want is None:
         want = not (st.starred if st else False)
@@ -179,6 +201,23 @@ def followups(request):
     from . import queries
     today = date.today().isoformat()
     soon = (date.today() + timedelta(days=int(request.GET.get("days", 7) or 7))).isoformat()
+    if request.user.is_authenticated:
+        from accounts.models import UserJobStatus
+        rows = list(UserJobStatus.objects.filter(user=request.user))
+        by_id = {r.job_id: r for r in rows}
+        due_ids = [r.job_id for r in rows if r.followup_date and r.followup_date <= soon]
+        tracked_ids = [r.job_id for r in rows if r.starred or r.status in ("Shortlisted", "Applied", "Interviewing", "Interview", "Offer")]
+        jobs = {j.job_id: j for j in queries.base_queryset().filter(job_id__in=set(due_ids) | set(tracked_ids))}
+        from accounts.context import overlay_for
+        _, match_map = overlay_for(request, list(jobs))
+        ser = lambda jid: queries.serialize(jobs[jid], by_id.get(jid), match_map.get(jid))  # noqa: E731
+        overdue = sorted((jid for jid in due_ids if by_id[jid].followup_date < today and jid in jobs), key=lambda jid: by_id[jid].followup_date)
+        upcoming = sorted((jid for jid in due_ids if by_id[jid].followup_date >= today and jid in jobs), key=lambda jid: by_id[jid].followup_date)
+        closing = sorted((jid for jid in tracked_ids if jid in jobs and jobs[jid].expires_at and today <= jobs[jid].expires_at <= soon),
+                         key=lambda jid: jobs[jid].expires_at)
+        return Response({"overdue": [ser(j) for j in overdue], "upcoming": [ser(j) for j in upcoming],
+                         "closing_soon": [ser(j) for j in closing],
+                         "counts": {"overdue": len(overdue), "upcoming": len(upcoming), "closing_soon": len(closing)}})
     qs = queries.base_queryset()
     due = qs.exclude(applicationstatus__followup_date="").filter(applicationstatus__followup_date__lte=soon)
     tracked = qs.filter(Q(applicationstatus__starred=True) | Q(applicationstatus__status__in=["Shortlisted", "Applied", "Interviewing", "Interview", "Offer"]))   # positive match: jobs with no status row are not tracked
@@ -192,18 +231,24 @@ def followups(request):
 
 @api_view(["GET"])
 def pipeline(request):
-    """Application funnel: how many jobs sit in each status."""
+    """Application funnel: how many jobs sit in each status — this account's own when signed in, the shared
+    instance-wide one otherwise."""
     from django.db.models import Count
-    from .models import ApplicationStatus
     order = ["New", "Shortlisted", "Applied", "Interviewing", "Offer", "Rejected", "Passed on it"]
-    counts = {r["status"]: r["n"] for r in ApplicationStatus.objects.using("jobhunt").values("status").annotate(n=Count("status"))}
+    if request.user.is_authenticated:
+        from accounts.models import UserJobStatus
+        counts = {r["status"]: r["n"] for r in UserJobStatus.objects.filter(user=request.user).values("status").annotate(n=Count("status"))}
+        starred = UserJobStatus.objects.filter(user=request.user, starred=True).count()
+    else:
+        from .models import ApplicationStatus
+        counts = {r["status"]: r["n"] for r in ApplicationStatus.objects.using("jobhunt").values("status").annotate(n=Count("status"))}
+        starred = ApplicationStatus.objects.using("jobhunt").filter(starred=True).count()
     stages = [{"status": s, "count": counts.pop(s, 0)} for s in order]
     stages += [{"status": s, "count": n} for s, n in sorted(counts.items())]
     applied = sum(s["count"] for s in stages if s["status"] in ("Applied", "Interview", "Offer", "Rejected"))
     interviews = sum(s["count"] for s in stages if s["status"] in ("Interviewing", "Interview", "Offer"))
     return Response({"stages": stages, "applied": applied, "interviews": interviews,
-                     "interview_rate": round(interviews / applied * 100) if applied else 0,
-                     "starred": ApplicationStatus.objects.using("jobhunt").filter(starred=True).count()})
+                     "interview_rate": round(interviews / applied * 100) if applied else 0, "starred": starred})
 
 
 @api_view(["GET"])
@@ -222,7 +267,9 @@ def job_detail(request, job_id):
         sys.path.insert(0, str(ROOT))
         from src import likelihood as _like, job_details as _jd, resume as _res
         prof = _res.parse().get("profile") or {}
-        job_dict = queries.serialize(job)
+        from accounts.context import overlay_for
+        status_map, match_map = overlay_for(request, [job_id])
+        job_dict = queries.serialize(job, status_map.get(job_id), match_map.get(job_id))
         kw = queries.fit_keyword(job)
         rate_input = dict(job_dict, kw_fit=kw if kw is not None else job_dict["fit_score"])  # never re-blend a blended score
         like = _like.rate(rate_input, prof, deep=True)
@@ -238,6 +285,17 @@ def job_status(request, job_id):
     status_val = data.get("status")
     if not status_val:
         return Response({"error": "status required"}, status=400)
+    if request.user.is_authenticated:
+        from accounts.context import set_status
+        from accounts.models import UserJobStatus
+        fields = {"status": status_val}
+        for k in ("notes", "applied_date", "followup_date", "dismiss_reason"):
+            if data.get(k) is not None:
+                fields[k] = data[k]
+        cur = UserJobStatus.objects.filter(user=request.user, job_id=job_id).first()
+        prev = (cur.status if cur else "") or "New"
+        set_status(request.user, job_id, **fields)
+        return Response({"ok": True, "job_id": job_id, "status": status_val, "from_status": prev})
     try:
         import sys
         sys.path.insert(0, str(ROOT))
@@ -373,10 +431,17 @@ def cover_letter(request):
     return Response({"ok": True, "pending": True, "job_id": job_id, "job": _letter["job"]})
 
 
-def _full_job(job) -> dict:
-    """Everything the analysers need about a job (they read the active resume themselves)."""
+def _full_job(job, request=None) -> dict:
+    """Everything the analysers need about a job. fit_score/tier/why reflect this account's own match when
+    signed in (see accounts/context.py); the analysers themselves (ATS keywords, interview prep, salary
+    comparison) still read the shared instance-wide resume even for a signed-in account — see docs/ACCOUNTS.md."""
     from . import queries
-    d = queries.serialize(job)
+    user_status = user_match = queries.UNSET
+    if request is not None:
+        from accounts.context import overlay_for
+        status_map, match_map = overlay_for(request, [job.job_id])
+        user_status, user_match = status_map.get(job.job_id), match_map.get(job.job_id)
+    d = queries.serialize(job, user_status, user_match)
     d["kw_fit"] = queries.fit_keyword(job) if queries.fit_keyword(job) is not None else job.fit_score
     return d
 
@@ -394,7 +459,7 @@ def _legacy(fn):
         except Job.DoesNotExist:
             return Response({"error": "not found"}, status=404)
         try:
-            return Response(fn(_full_job(job)))
+            return Response(fn(_full_job(job, request)))
         except Exception as e:
             import traceback
             return Response({"error": str(e), "trace": traceback.format_exc()[:2000]}, status=500)
@@ -449,7 +514,10 @@ def state(request):
         # Prefer Django DB
         try:
             from . import queries
-            jobs = [queries.serialize(j) for j in queries.base_queryset().order_by("-fit_score", "company")[:2000]]
+            page = list(queries.base_queryset().order_by("-fit_score", "company")[:2000])
+            from accounts.context import overlay_for
+            status_map, match_map = overlay_for(request, [j.job_id for j in page])
+            jobs = [queries.serialize(j, status_map.get(j.job_id), match_map.get(j.job_id)) for j in page]
         except Exception:
             pass
         # Fallback to JSON file if DB empty

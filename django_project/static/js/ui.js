@@ -15,7 +15,8 @@ function palCommands(){
     {label:'Ledger: all roles',hint:'mode',run:()=>goto('jobs')},{label:'Clear all filters',hint:'ledger',run:()=>goto('jobs')},
     {label:'Run scan',hint:'action',run:()=>launch('/api/scan/',{dry_run:true},$('#bScan'))},{label:'Re-score all jobs',hint:'action',run:async()=>{ toast('Re-scoring…'); await jfetch('/api/rescore/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({wait:true})}); await refreshPage(); toast('Re-scored'); }},
     {label:'Open today’s digest',hint:'report',run:()=>window.open('/api/digest/?days=1&fmt=md','_blank')},{label:'Download calendar (.ics)',hint:'export',run:()=>{ location.href='/api/calendar.ics'; }},
-    {label:'Toggle theme',hint:'ui',run:()=>$('#navTheme').click()},{label:'Keyboard shortcuts',hint:'help',run:()=>$('#helpDlg').showModal()}];
+    {label:'Toggle theme',hint:'ui',run:()=>$('#navTheme').click()},{label:'Keyboard shortcuts',hint:'help',run:()=>$('#helpDlg').showModal()},
+    AUTH.authenticated?{label:`Account: ${AUTH.email}`,hint:'account',run:()=>openAuthDlg()}:{label:'Sign in / create account',hint:'account',run:()=>openAuthDlg('login')}];
 }
 function palRender(q){
   const ql=q.toLowerCase().trim();

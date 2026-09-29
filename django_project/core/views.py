@@ -1,11 +1,15 @@
 from django.shortcuts import render
 from django.http import JsonResponse
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import StatusEvent
 
 def _page(template, key, title):
-    """One view per page. Each page is its own template under templates/pages/ (shell in layout.html)."""
+    """One view per page. Each page is its own template under templates/pages/ (shell in layout.html).
+    ensure_csrf_cookie: no template here renders a form, so nothing would otherwise trigger Django to set the
+    csrftoken cookie — jfetch (core.js) needs it on hand before the first POST, for whoever ends up signed in."""
+    @ensure_csrf_cookie
     def view(request):
         return render(request, template, {"page": key, "page_title": title})
     view.__name__ = f"page_{key}"

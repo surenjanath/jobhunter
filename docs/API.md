@@ -1,7 +1,20 @@
 # API
 
-JSON over HTTP, served by the Django app under `/api/`. No authentication (run it on localhost). Every endpoint
-answers with JSON, including errors (`{"error": "..."}`), and works with or without a trailing slash.
+JSON over HTTP, served by the Django app under `/api/`. Every endpoint answers with JSON, including errors
+(`{"error": "..."}`), and works with or without a trailing slash.
+
+Authentication is optional (see [Accounts](ACCOUNTS.md)) — session cookies, POST/PUT/DELETE need the CSRF token
+from the `csrftoken` cookie in an `X-CSRFToken` header (the frontend's `jfetch` does this automatically). Signed
+out, every endpoint behaves exactly as it did before accounts existed.
+
+## Accounts
+
+| Method & path | What it does |
+|---|---|
+| `GET /api/auth/me/` | `{authenticated, email, has_profile}` |
+| `POST /api/auth/register/` | `{email, password, keep_current_resume}` — creates the account, signs it in, and (unless `keep_current_resume` is `false`) copies the currently-active anonymous resume into it |
+| `POST /api/auth/login/` | `{email, password}` |
+| `POST /api/auth/logout/` | — |
 
 ## Jobs
 

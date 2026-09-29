@@ -48,6 +48,11 @@ an outside provider are opt-in and say so). There is no account and no login.
 - Local and remote are first-class: an All / Local / Remote / On-site-abroad switch, a work-mode preference
   (local-first, remote-only, …), TT$ and US$ salary floors, preferred regions.
 
+**Optional accounts** — no login needed to try it
+- Test your resume anonymously, then "Create a free account" and it comes with you — your resume, fit scores and
+  pipeline become private to your email and password, accessible again on any device. Everyone still shares one
+  scanned pool of listings; only your resume, scores and tracking are private. See [Accounts](docs/ACCOUNTS.md).
+
 **Shows you the picture** (Chart.js, light and dark)
 - **Analytics**: your skills against what listings ask for, coverage by skill area, "learn next" (missing skills that
   block the most listings, restricted to areas you already work in), local vs remote, who remote roles are open to, pay,
@@ -175,6 +180,7 @@ Each page is its own Django template (`templates/pages/`) with its own script (`
 - [Job sources](docs/SOURCES.md): what is covered, how to add a site or an employer
 - [API](docs/API.md): the JSON endpoints behind the UI
 - [Scheduling scans](docs/SCHEDULING.md): cron / launchd, instead of clicking Scan in the UI
+- [Accounts](docs/ACCOUNTS.md): what's private per account, what stays shared, and known gaps
 - [Contributing](CONTRIBUTING.md)
 
 ## Testing
