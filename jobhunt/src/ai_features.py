@@ -349,31 +349,37 @@ def delivery_feedback(voice: dict | None) -> dict | None:
 # ---------------------------------------------------------------------------
 
 _COMPOSURE_CUES = [
-    # key, test(voice) -> bool, weight, what a listener hears, the fix
-    ("jitter", lambda v: (v.get("jitter") or 0) > 0.045, 16, "your pitch wavered from moment to moment (a shaky voice)",
+    # key, test(voice, thresholds) -> bool, weight, what a listener hears, the fix. Thresholds come from
+    # coach.personal_thresholds(): generic without a voice baseline, fitted around YOUR calm voice with one.
+    ("jitter", lambda v, t: (v.get("jitter") or 0) > t["jitter"], 16, "your pitch wavered from moment to moment (a shaky voice)",
      "Slow your breathing before you start: a full breath out steadies the voice more than anything else."),
-    ("drift", lambda v: (v.get("pitch_drift_st") or 0) > 1.5, 12, "your pitch started noticeably higher than it ended, a classic sign of nerves in the opening",
+    ("raised", lambda v, t: bool(t["raised_pitch"]) and (v.get("pitch_mean_hz") or 0) > t["raised_pitch"], 12,
+     "your voice sat noticeably higher than your normal speaking pitch, a common stress response",
+     "Before answering, breathe out slowly and start the first sentence a little lower than feels natural."),
+    ("drift", lambda v, t: (v.get("pitch_drift_st") or 0) > 1.5, 12, "your pitch started noticeably higher than it ended, a classic sign of nerves in the opening",
      "Rehearse your first two sentences until they're automatic, so the opening doesn't carry the adrenaline."),
-    ("uptalk", lambda v: (v.get("uptalk_ratio") or 0) > 0.4 and (v.get("phrases") or 0) >= 3, 12, "many statements rose at the end like questions, which sounds unsure",
+    ("uptalk", lambda v, t: (v.get("uptalk_ratio") or 0) > t["uptalk"] and (v.get("phrases") or 0) >= 3, 12, "many statements rose at the end like questions, which sounds unsure",
      "Land your statements: let the pitch fall at the end of each sentence, especially the result."),
-    ("trail", lambda v: (v.get("trail_off_ratio") or 0) > 0.4 and (v.get("phrases") or 0) >= 3, 10, "you often trailed off at the end of sentences",
+    ("trail", lambda v, t: (v.get("trail_off_ratio") or 0) > 0.4 and (v.get("phrases") or 0) >= 3, 10, "you often trailed off at the end of sentences",
      "Finish each sentence at full volume; the last words are usually the important ones."),
-    ("latency", lambda v: (v.get("start_latency_sec") or 0) > 4, 8, "you took a long time to start",
+    ("latency", lambda v, t: (v.get("start_latency_sec") or 0) > 4, 8, "you took a long time to start",
      "It's fine to buy a second (\"Good question — let me think of the best example\"), then begin."),
-    ("rush", lambda v: (v.get("pace_wpm") or 0) > 180, 12, "you were rushing",
+    ("rush", lambda v, t: (v.get("pace_wpm") or 0) > t["rush_wpm"], 12, "you were rushing",
      "Deliberately slow down; pausing after a key point reads as confidence."),
-    ("narrow", lambda v: v.get("pitch_range_st") is not None and v["pitch_range_st"] < 2.0, 8, "your pitch range was very narrow, which reads as tense or held back",
+    ("narrow", lambda v, t: v.get("pitch_range_st") is not None and v["pitch_range_st"] < t["narrow_st"], 8, "your pitch range was very narrow, which reads as tense or held back",
      "Let your voice move: stress the words that matter (the action, the number)."),
 ]
 
 
-def composure_feedback(voice: dict | None, filler_per_100: float = 0.0) -> dict | None:
+def composure_feedback(voice: dict | None, filler_per_100: float = 0.0, baseline: dict | None = None) -> dict | None:
     if not voice or not voice.get("duration_sec") or (voice.get("duration_sec") or 0) < 5:
         return None
+    from src import coach
+    th = coach.personal_thresholds(baseline)
     signals, fixes, penalty = [], [], 0
     for key, test, w, heard, fix in _COMPOSURE_CUES:
         try:
-            hit = test(voice)
+            hit = test(voice, th)
         except (TypeError, ValueError):
             hit = False
         if hit:
@@ -394,8 +400,10 @@ def composure_feedback(voice: dict | None, filler_per_100: float = 0.0) -> dict 
     else:
         honest = (f"Honestly, you sounded {'quite ' if score < 60 else 'a bit '}nervous: " + "; ".join(heard[:3])
                   + (". An interviewer would likely notice." if score < 60 else ". Most interviewers make allowances for this, but it's worth fixing."))
-    return {"score": score, "label": label, "signals": signals, "honest": honest, "fixes": fixes[:3],
-            "caveat": "Estimated from vocal cues (pitch, volume, timing), not a diagnosis. A cold, a noisy room or a naturally fast talker can trip these."}
+    return {"score": score, "label": label, "signals": signals, "honest": honest, "fixes": fixes[:3], "personal": bool(baseline),
+            "caveat": ("Compared with your own calm-voice baseline. " if baseline else
+                       "Judged against generic thresholds; record a calm-voice baseline to judge against your own voice. ")
+                      + "Estimated from vocal cues (pitch, volume, timing), not a diagnosis. A cold or a noisy room can trip these."}
 
 
 def honest_take(score: int, star: dict, has_nums: bool, n_words: int, composure: dict | None) -> str:
@@ -419,7 +427,8 @@ PERSONAS = {
 
 
 def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = False, cfg: dict | None = None, voice: dict | None = None,
-                       persona: str = "neutral") -> dict:
+                       persona: str = "neutral", kind: str = "behavioural", baseline: dict | None = None, camera: dict | None = None,
+                       interrupted: bool = False, offer: dict | None = None) -> dict:
     answer = (answer or "").strip()
     if len(answer.split()) < 8:
         return {"error": "write at least a couple of sentences to get feedback"}
@@ -458,8 +467,17 @@ def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = Fa
         missing_terms = [s for s in asked if s not in skills]
         if missing_terms:
             tips.append("You could name the skills the posting cares about that you actually used: " + ", ".join(missing_terms) + ".")
+    from src import coach
+    checks = None
+    if kind in coach.KINDS and kind != "behavioural":
+        # a non-behavioural answer isn't judged on STAR: its own checks replace the content score, tips and verdict
+        kf = coach.kind_feedback(kind, question, answer, job, offer)
+        score, checks, tips = kf["score"], kf["checks"], kf["tips"] + [t for t in tips if t.startswith("Cut hedging")]
+    if interrupted:
+        tips.insert(0, "The interviewer had to cut you off. Aim to land the point inside two minutes, then offer more detail if they want it.")
+        score = max(0, score - 8)
     delivery = delivery_feedback(voice)
-    composure = composure_feedback(voice, round(len(filler) / len(words) * 100, 1) if words else 0)
+    composure = composure_feedback(voice, round(len(filler) / len(words) * 100, 1) if words else 0, baseline)
     if delivery and composure:
         delivery["score"] = round(delivery["score"] * 0.6 + composure["score"] * 0.4)
     overall = round(score * 0.7 + delivery["score"] * 0.3) if delivery else score
@@ -468,8 +486,13 @@ def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = Fa
            "verdict": verdict, "provider": "rules", "delivery": delivery,
            "filler": dict(Counter(f.lower() for f in filler).most_common(6)), "filler_count": len(filler),
            "follow_up": follow_up_question(star, has_nums, first_i, first_we, len(words)), "follow_up_by": "rules",
-           "composure": composure, "honest": honest_take(score, star, has_nums, len(words), composure)}
-    if persona == "tough" and not out["follow_up"] and overall < 80:
+           "composure": composure, "honest": honest_take(score, star, has_nums, len(words), composure),
+           "kind": kind, "checks": checks, "camera": coach.camera_feedback(camera), "interrupted": interrupted}
+    if checks is not None:
+        out["honest"] = kf["honest"]
+        out["follow_up"] = None       # typed interviews run their own scripted sequence (e.g. negotiation pressure)
+        out["verdict"] = "Strong" if overall >= 75 else "Solid, tighten it" if overall >= 55 else "Needs work"
+    if persona == "tough" and kind == "behavioural" and not out["follow_up"] and overall < 80:
         out["follow_up"] = "Let me push on that. What would you do differently if you did it again, and why?"
     if use_llm:
         out.update(_llm_answer_review(job, question, answer, out, persona, cfg))

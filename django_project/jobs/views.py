@@ -655,6 +655,16 @@ def calendar_ics(request):
             events.append((st.followup_date, f"Follow up: {j.title} @ {j.company}", f"Status: {st.status}. {st.notes or ''} {j.url}", f"fu-{j.job_id}"))
         if tracked and j.expires_at and j.expires_at >= today:
             events.append((j.expires_at, f"Closes: {j.title} @ {j.company}", f"Apply before this date. {j.url}", f"close-{j.job_id}"))
+    # real interviews (Interview page) and their mock-interview prep days
+    from coach.models import RealInterview
+    ri = RealInterview.objects.filter(user=request.user) if request.user.is_authenticated else RealInterview.objects.filter(user__isnull=True)
+    for r in ri.filter(scheduled_on__gte=date.today() - timedelta(days=1), logged=False):
+        d = r.scheduled_on.isoformat()
+        events.append((d, f"Interview ({r.get_stage_display()}): {r.job_title} @ {r.company}", "Prep plan on the JobHunter Interview page.", f"iv-{r.id}"))
+        for k, before in (("mock1", 4), ("mock2", 2)):
+            day = r.scheduled_on - timedelta(days=before)
+            if day >= date.today():
+                events.append((day.isoformat(), f"Mock interview: {r.company}", "Practice on the JobHunter Interview page.", f"iv-{r.id}-{k}"))
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//JobHunter//EN", "CALSCALE:GREGORIAN", "X-WR-CALNAME:JobHunter"]
     for day, summary, desc, uid in events:
         d = day[:10].replace("-", "")

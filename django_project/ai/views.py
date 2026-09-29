@@ -99,9 +99,15 @@ def outreach(request, job, d):
 def interview_feedback(request, job, d):
     voice = request.data.get("voice") if isinstance(request.data.get("voice"), dict) else None
     persona = str(request.data.get("persona") or "neutral")
+    from coach.views import baseline_for
+    from src import coach
+    kind = str(request.data.get("kind") or "behavioural")
+    dct = lambda k: request.data.get(k) if isinstance(request.data.get(k), dict) else None   # noqa: E731
     out = _feat().interview_feedback(d, str(request.data.get("question") or ""), str(request.data.get("answer") or ""),
                                      use_llm=_want_ai(request), cfg=_cfg(), voice=voice,
-                                     persona=persona if persona in _feat().PERSONAS else "neutral")
+                                     persona=persona if persona in _feat().PERSONAS else "neutral",
+                                     kind=kind if kind in coach.KINDS else "behavioural", baseline=baseline_for(request),
+                                     camera=dct("camera"), interrupted=bool(request.data.get("interrupted")), offer=dct("offer"))
     return Response(out, status=400 if out.get("error") else 200)
 
 
@@ -114,10 +120,44 @@ def interview_questions(request, job, d):
     except (TypeError, ValueError):
         n = 5
     persona = str(request.data.get("persona") or "neutral")
+    persona = persona if persona in _feat().PERSONAS else "neutral"
+    from src import coach
+    kind = str(request.data.get("kind") or "behavioural")
+    if kind in coach.KINDS and kind != "behavioural":
+        return Response(_typed_questions(request, d, kind, n, persona))
     if not _want_ai(request):
         from src import interview as _iv
-        return Response({"questions": (_iv.questions(d).get("questions") or [])[:n], "provider": "rules"})
-    return Response(_feat().ai_questions(d, n=n, persona=persona if persona in _feat().PERSONAS else "neutral", cfg=_cfg()))
+        return Response({"questions": (_iv.questions(d).get("questions") or [])[:n], "provider": "rules", "kind": "behavioural"})
+    return Response({**_feat().ai_questions(d, n=n, persona=persona, cfg=_cfg()), "kind": "behavioural"})
+
+
+def _typed_questions(request, d: dict, kind: str, n: int, persona: str) -> dict:
+    """Screen / technical / negotiation / reverse. Negotiation also returns the opening offer to negotiate against,
+    built from the posted range or what similar roles pay. AI (when on) rewrites technical questions for the role."""
+    from src import coach
+    from src import salary as _sal
+    from coach.views import _requirements
+    _, skills = _requirements(request, d)
+    offer = {}
+    if kind == "negotiation":
+        local = bool(d.get("region")) or "trinidad" in (d.get("location") or "").lower()
+        bm = _sal.benchmark(d)
+        offer = coach.offer_for(bm, (bm or {}).get("peers") or _sal.context_for_missing(d).get("peers"), local)
+    qs = coach.typed_questions(kind, d, skills, offer)
+    provider = "rules"
+    if kind == "technical" and _want_ai(request):
+        text, backend = _feat()._ask_llm(
+            "You are " + _feat().PERSONAS[persona] + " running a technical interview. Write realistic technical questions for this role, "
+            "to be READ ALOUD: one question each, under 35 words, no multi-part lists. Mix: explain-a-concept, a trade-off decision, "
+            'debugging, and (if senior) one design question. Reply with JSON only: {"questions": [{"q": "...", "why": "what it tests"}]}.',
+            f"Role: {d.get('title')} at {d.get('company')}\nKey skills: {', '.join(skills)}\nPosting:\n{(d.get('description') or '')[:3000]}", _cfg())
+        data = _feat()._json_from(text)
+        items = data.get("questions") if isinstance(data, dict) else None
+        ai_qs = [{"q": str(x["q"]).strip(), "why": str(x.get("why") or ""), "by": backend} for x in (items or [])
+                 if isinstance(x, dict) and isinstance(x.get("q"), str) and 12 < len(x["q"]) and len(x["q"].split()) <= 60]
+        if len(ai_qs) >= 2:
+            qs, provider = ai_qs, backend
+    return {"questions": qs[:n], "provider": provider, "kind": kind, "offer": offer or None}
 
 
 @api_view(["POST"])
@@ -140,6 +180,13 @@ def interview_summary(request):
             job_id=str(job.get("job_id") or "")[:255], job_title=str(job.get("title") or "")[:300], company=str(job.get("company") or "")[:300],
             overall=out["overall_avg"], content=out["content_avg"], delivery=out["delivery_avg"], n=out["n"], summary=out, results=results)
         out["session_id"] = s.id
+        from coach.views import add_drill
+        owner = request.user if request.user.is_authenticated else None
+        weak = [r for r in results if isinstance(r.get("overall_score"), (int, float)) and r["overall_score"] < 65 and r.get("question")]
+        for r in weak:
+            add_drill(owner, str(r["question"]), str(r.get("kind") or "behavioural"), str(job.get("job_id") or ""),
+                      f"{job.get('title') or ''} @ {job.get('company') or ''}", score=int(r["overall_score"]))
+        out["drills_added"] = len(weak)
     return Response(out)
 
 

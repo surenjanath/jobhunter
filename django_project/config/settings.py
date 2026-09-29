@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'candidate',
     'ai',
     'accounts',
+    'coach',
     'core',
 ]
 
