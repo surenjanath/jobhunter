@@ -62,3 +62,37 @@ def run(check, cfg):
     with mock.patch.object(ai, "_ask_llm", return_value=(None, "unavailable: x")):
         s = ai.posting_summary(job, use_llm=True)
         check("LLM unavailable falls back to the rules text", s["provider"] == "rules" and "Senior Python Developer" in s["tldr"])
+
+    # voice delivery — computed client-side (pace, pitch variety, pauses, volume), scored server-side
+    check("delivery_feedback: no data -> None (never fabricated)", ai.delivery_feedback(None) is None)
+    check("delivery_feedback: empty dict -> None", ai.delivery_feedback({}) is None)
+    good_voice = {"duration_sec": 30, "pace_wpm": 140, "pitch_mean_hz": 180, "pitch_stdev_hz": 35,
+                 "pause_ratio": 0.1, "long_pauses": 0, "volume_mean": 0.35, "volume_stdev": 0.08}
+    gd = ai.delivery_feedback(good_voice)
+    check("delivery_feedback: solid delivery scores high with no tips", gd["score"] >= 90 and not gd["tips"], gd)
+    bad_voice = {"duration_sec": 40, "pace_wpm": 90, "pitch_mean_hz": 170, "pitch_stdev_hz": 5,
+                "pause_ratio": 0.5, "long_pauses": 4, "volume_mean": 0.05, "volume_stdev": 0.09}
+    bd = ai.delivery_feedback(bad_voice)
+    check("delivery_feedback: flags slow pace, flat tone, long pauses, low volume", bd["score"] < 70 and len(bd["tips"]) == 4, bd["tips"])
+    check("delivery_feedback: fast pace flagged too", ai.delivery_feedback({**good_voice, "pace_wpm": 200})["tips"], "expected a pace tip")
+
+    good = ("When our finance team had a reporting deadline I built a Django tool. My goal was to cut manual work, "
+            "so I decided to automate it and wrote the pipeline myself. It saved 100 hours a month and three departments adopted it.")
+    plain = ai.interview_feedback(job, "q", good)
+    check("interview_feedback without voice: unchanged shape, no delivery", plain["delivery"] is None and plain["overall_score"] == plain["score"])
+    with_voice = ai.interview_feedback(job, "q", good, voice=bad_voice)
+    check("interview_feedback with poor delivery: overall_score drops below content score", with_voice["overall_score"] < with_voice["score"], with_voice)
+    check("interview_feedback: verdict matches the spoken overall_score, not the content-only score",
+         (with_voice["overall_score"] >= 75) == (with_voice["verdict"] == "Strong"))
+    check("interview_feedback: content score itself is untouched by voice", with_voice["score"] == plain["score"])
+
+    # whole-session wrap-up
+    check("session_summary: no scored answers -> error", "error" in ai.session_summary([]))
+    r1 = dict(ai.interview_feedback(job, "Q1", good), question="Q1")
+    weak_ans = "I think we basically did some stuff and it went well I guess honestly you know."
+    r2 = dict(ai.interview_feedback(job, "Q2", weak_ans), question="Q2")
+    sess = ai.session_summary([r1, r2])
+    check("session_summary: averages both questions", sess["n"] == 2 and sess["content_avg"] == round((r1["score"] + r2["score"]) / 2), sess)
+    check("session_summary: finds the best and worst question by name", sess["best"]["question"] == "Q1" and sess["worst"]["question"] == "Q2", sess)
+    check("session_summary: a garbage/non-dict item in results is ignored, not a crash", ai.session_summary([r1, "not a result", None])["n"] == 1)
+    check("session_summary: speech mentions the overall score", str(sess["overall_avg"]) in sess["speech"])

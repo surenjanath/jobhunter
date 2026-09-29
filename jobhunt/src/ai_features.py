@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from datetime import date
 
 from src import matching, retrieval
@@ -258,7 +259,72 @@ _STAR = {
 FILLER = re.compile(r"\b(kind of|sort of|basically|actually|i guess|i think|maybe|um+|uh+|you know|stuff|things like that)\b", re.I)
 
 
-def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = False, cfg: dict | None = None) -> dict:
+# ---------------------------------------------------------------------------
+# voice delivery — pace, pitch variety, pauses, volume. Computed client-side from the raw microphone signal
+# (Web Audio API: an autocorrelation pitch estimate + RMS energy per frame — see static/js/interview.js), sent
+# here as summary numbers only; no audio is ever uploaded. This is a practical coaching signal, not a validated
+# acoustic analysis — thresholds are deliberately generous so it only speaks up on something clearly notable.
+# ---------------------------------------------------------------------------
+
+def delivery_feedback(voice: dict | None) -> dict | None:
+    """voice: {duration_sec, words, pace_wpm, pitch_mean_hz, pitch_stdev_hz, pause_ratio, long_pauses,
+    volume_mean, volume_stdev} — every key optional; missing ones are simply skipped, never guessed at."""
+    if not voice or not voice.get("duration_sec"):
+        return None
+    tips: list[str] = []
+    notes: list[str] = []
+    scores: list[float] = []
+
+    pace = voice.get("pace_wpm")
+    if pace:
+        if pace < 105:
+            tips.append(f"Pace: about {round(pace)} words/minute — on the slow side. A little more pace reads as more prepared and confident.")
+            scores.append(60)
+        elif pace > 175:
+            tips.append(f"Pace: about {round(pace)} words/minute — quite fast. Slow down on the key point so it lands.")
+            scores.append(65)
+        else:
+            notes.append(f"Good pace ({round(pace)} words/minute).")
+            scores.append(95)
+
+    mean_p, sd_p = voice.get("pitch_mean_hz"), voice.get("pitch_stdev_hz")
+    if mean_p and sd_p is not None:
+        cv = sd_p / mean_p if mean_p else 0
+        if cv < 0.06:
+            tips.append("Tone stayed fairly flat. A bit more natural variation in pitch reads as more engaged.")
+            scores.append(65)
+        else:
+            notes.append("Natural variation in your tone — didn't sound flat.")
+            scores.append(95)
+
+    pr, longp = voice.get("pause_ratio"), voice.get("long_pauses") or 0
+    if pr is not None:
+        if pr > 0.38 or longp >= 3:
+            tips.append("A fair amount of silence between thoughts. Pausing to think is fine — long or frequent pauses can read as unprepared.")
+            scores.append(60)
+        else:
+            notes.append("Kept good momentum, no long dead air.")
+            scores.append(95)
+
+    vm, vs = voice.get("volume_mean"), voice.get("volume_stdev")
+    if vm is not None:
+        if vm < 0.12:
+            tips.append("Volume was quite low. Speaking a bit louder reads as more confident, especially over a call.")
+            scores.append(65)
+        elif vs is not None and vm and vs / vm > 0.9:
+            tips.append("Volume varied a lot, like trailing off at the end of sentences. Keep it steady through to the end of each point.")
+            scores.append(70)
+        else:
+            notes.append("Clear, steady volume.")
+            scores.append(95)
+
+    if not scores:
+        return None
+    return {"score": round(sum(scores) / len(scores)), "tips": tips[:4], "notes": notes,
+           "metrics": {k: voice.get(k) for k in ("pace_wpm", "pitch_mean_hz", "pitch_stdev_hz", "pause_ratio", "long_pauses", "volume_mean") if voice.get(k) is not None}}
+
+
+def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = False, cfg: dict | None = None, voice: dict | None = None) -> dict:
     answer = (answer or "").strip()
     if len(answer.split()) < 8:
         return {"error": "write at least a couple of sentences to get feedback"}
@@ -297,17 +363,57 @@ def interview_feedback(job: dict, question: str, answer: str, use_llm: bool = Fa
         missing_terms = [s for s in asked if s not in skills]
         if missing_terms:
             tips.append("You could name the skills the posting cares about that you actually used: " + ", ".join(missing_terms) + ".")
-    verdict = "Strong" if score >= 75 else "Solid, tighten it" if score >= 55 else "Needs structure"
-    out = {"score": score, "star": star, "words": len(words), "numbers": has_nums, "skills_named": skills[:8], "tips": tips[:6],
-           "verdict": verdict, "provider": "rules"}
+    delivery = delivery_feedback(voice)
+    overall = round(score * 0.7 + delivery["score"] * 0.3) if delivery else score
+    verdict = "Strong" if overall >= 75 else "Solid, tighten it" if overall >= 55 else "Needs structure"
+    out = {"score": score, "overall_score": overall, "star": star, "words": len(words), "numbers": has_nums, "skills_named": skills[:8], "tips": tips[:6],
+           "verdict": verdict, "provider": "rules", "delivery": delivery}
     if use_llm:
         text, backend = _ask_llm("You are an interview coach. Give three short, specific improvements to this answer. Do not invent facts. Plain words.",
                                  f"Question: {question}\nAnswer: {answer}", cfg)
         if text:
             out.update(coach=text.strip(), provider=backend)
     # what a voice interviewer would say back — plain text; actual speech synthesis (optional, needs Kokoro) is src.voice.synthesize()
-    speak_tip = re.sub(r"^[A-Za-z ,]+: ", "", tips[0]) if tips else ""
-    out["speech"] = f"You scored {score} out of 100. {verdict}." + (f" The main thing to work on: {speak_tip}" if speak_tip else " Nicely done.")
+    speak_tip = re.sub(r"^[A-Za-z ,]+: ", "", tips[0]) if tips else (delivery["tips"][0] if delivery and delivery["tips"] else "")
+    out["speech"] = f"You scored {overall} out of 100. {verdict}." + (f" The main thing to work on: {speak_tip}" if speak_tip else " Nicely done.")
+    return out
+
+
+# ---------------------------------------------------------------------------
+# whole-session wrap-up — averages, the strongest and weakest answer, and patterns across every tip given,
+# built entirely from the per-question interview_feedback() results already collected client-side. No
+# re-scoring, no re-reading of audio: this is a summary of a summary.
+# ---------------------------------------------------------------------------
+
+def session_summary(results: list[dict], use_llm: bool = False, cfg: dict | None = None) -> dict:
+    scored = [r for r in (results or []) if isinstance(r, dict) and isinstance(r.get("overall_score"), (int, float))]
+    if not scored:
+        return {"error": "no scored answers in this session yet"}
+    n = len(scored)
+    content_avg = round(sum(r["score"] for r in scored) / n)
+    overall_avg = round(sum(r["overall_score"] for r in scored) / n)
+    delivery_scores = [r["delivery"]["score"] for r in scored if r.get("delivery")]
+    delivery_avg = round(sum(delivery_scores) / len(delivery_scores)) if delivery_scores else None
+    best = max(scored, key=lambda r: r["overall_score"])
+    worst = min(scored, key=lambda r: r["overall_score"])
+    tips = Counter(t for r in scored for t in (r.get("tips") or []))
+    tips.update(t for r in scored for t in (r.get("delivery") or {}).get("tips", []))
+    recurring = [t for t, c in tips.most_common(8) if c >= 2 or n <= 2][:5]
+    verdict = "Strong" if overall_avg >= 75 else "Solid, some rough edges" if overall_avg >= 55 else "Needs more prep"
+    out = {"n": n, "content_avg": content_avg, "overall_avg": overall_avg, "delivery_avg": delivery_avg, "verdict": verdict,
+           "best": {"question": best.get("question", ""), "score": best["overall_score"]},
+           "worst": {"question": worst.get("question", ""), "score": worst["overall_score"]},
+           "recurring_tips": recurring, "provider": "rules"}
+    if use_llm:
+        lines = "\n".join(f"- Q: {r.get('question','')}\n  Score: {r['overall_score']}/100. Tips: {'; '.join(r.get('tips') or []) or 'none'}" for r in scored)
+        text, backend = _ask_llm(
+            "You coach candidates after a mock interview. In 3-4 sentences: an honest, encouraging overall read, and the ONE thing to "
+            "focus on before the real interview. Use only what's given below — never invent an example or a fact not present in it.",
+            lines, cfg)
+        if text:
+            out.update(coach=text.strip(), provider=backend)
+    out["speech"] = (f"Overall, you scored {overall_avg} out of 100 across {n} question{'s' if n != 1 else ''}. {verdict}."
+                     + (f" Keep working on: {re.sub(r'^[A-Za-z ,:]+: ', '', recurring[0])}" if recurring else ""))
     return out
 
 

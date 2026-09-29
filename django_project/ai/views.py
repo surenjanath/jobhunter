@@ -97,8 +97,9 @@ def outreach(request, job, d):
 @api_view(["POST"])
 @_with_job
 def interview_feedback(request, job, d):
+    voice = request.data.get("voice") if isinstance(request.data.get("voice"), dict) else None
     out = _feat().interview_feedback(d, str(request.data.get("question") or ""), str(request.data.get("answer") or ""),
-                                     use_llm=_want_ai(request), cfg=_cfg())
+                                     use_llm=_want_ai(request), cfg=_cfg(), voice=voice)
     return Response(out, status=400 if out.get("error") else 200)
 
 
