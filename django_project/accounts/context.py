@@ -189,3 +189,25 @@ def set_status(user, job_id: str, **fields) -> "UserJobStatus":  # noqa: F821 (q
         fields["dismiss_reason"] = ""
     row, _ = UserJobStatus.objects.update_or_create(user=user, job_id=job_id, defaults=fields)
     return row
+
+
+
+class PipelineRow:
+    """The per-job pipeline fields every view needs, whichever table they came from."""
+    __slots__ = ("status", "starred", "followup_date", "notes", "applied_date")
+
+    def __init__(self, status="New", starred=False, followup_date="", notes="", applied_date=""):
+        self.status, self.starred, self.followup_date, self.notes, self.applied_date = (status or "New"), bool(starred), followup_date or "", notes or "", applied_date or ""
+
+
+def pipeline_statuses(request) -> dict:
+    """job_id -> PipelineRow: this account's own pipeline when signed in, the shared one otherwise. For views that
+    read status directly (brief, digest, recommendations) rather than through serialize()'s overlay."""
+    user = getattr(request, "user", None)
+    if user is not None and user.is_authenticated:
+        from .models import UserJobStatus
+        return {s.job_id: PipelineRow(s.status, s.starred, s.followup_date, s.notes, s.applied_date)
+                for s in UserJobStatus.objects.filter(user=user)}
+    from jobs.models import ApplicationStatus
+    return {s.job_id: PipelineRow(s.status, s.starred, s.followup_date, s.notes, s.applied_date)
+            for s in ApplicationStatus.objects.using("jobhunt").all()}

@@ -48,8 +48,12 @@ def _job(job_id):
         return None
 
 
-def _corpus(limit: int = 1500) -> list[dict]:
-    status = {s.job_id: s for s in ApplicationStatus.objects.using("jobhunt").all()}
+def _corpus(request=None, limit: int = 1500) -> list[dict]:
+    if request is not None:
+        from accounts.context import pipeline_statuses
+        status = pipeline_statuses(request)      # recommendations learn from THIS account's stars and applications
+    else:
+        status = {s.job_id: s for s in ApplicationStatus.objects.using("jobhunt").all()}
     out = []
     for j in Job.objects.using("jobhunt").order_by("-fit_score")[:limit]:
         st = status.get(j.job_id)
@@ -219,12 +223,12 @@ def interview_session(request, sid):
 @api_view(["GET"])
 @_with_job
 def similar(request, job, d):
-    return Response({"similar": _feat().similar_jobs(d, _corpus(), k=6)})
+    return Response({"similar": _feat().similar_jobs(d, _corpus(request), k=6)})
 
 
 @api_view(["GET"])
 def recommendations(request):
-    corpus = _corpus()
+    corpus = _corpus(request)
     liked = [j for j in corpus if j.get("starred") or j["app_status"] in ("Applied", "Interviewing", "Interview", "Offer", "Shortlisted")]
     recs = _feat().recommendations(corpus, liked, k=8)
     if not recs:  # no signals yet: your best untouched matches

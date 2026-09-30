@@ -258,3 +258,33 @@ class AccountExportTests(ScannerDBTestCase):
         self.assertNotIn("guest's private note", csv_a)
         self.assertNotIn("Rejected", csv_a)
         self.assertIn("guest's private note", guest.get("/api/jobs/export/").content.decode())
+
+
+class AccountPipelineViewsTests(ScannerDBTestCase):
+    """The Conditions brief, digest and recommendations follow the account's own pipeline, not the shared one."""
+    def test_brief_and_recommendations_use_the_accounts_pipeline(self):
+        from datetime import date, timedelta
+        self.make_job("pv1", title="Python Developer", company="Initech", fit_score=70)
+        self.make_job("pv2", title="Data Analyst", company="Globex", fit_score=60)
+        guest = APIClient()
+        past = (date.today() - timedelta(days=2)).isoformat()
+        guest.post("/api/jobs/bulk-status/", {"job_ids": ["pv1"], "status": "Applied"}, format="json")
+        from jobs.models import ApplicationStatus
+        ApplicationStatus.objects.using("jobhunt").filter(pk="pv1").update(followup_date=past, starred=True)
+        self.assertIn("Initech", guest.get("/api/brief/").json()["next_action"])          # guest: their overdue follow-up
+        from django.contrib.auth.models import AnonymousUser
+        from django.test import RequestFactory
+        from ai.views import _corpus
+        greq = RequestFactory().get("/"); greq.user = AnonymousUser()
+        self.assertTrue(next(j for j in _corpus(greq) if j["job_id"] == "pv1")["starred"])   # guest: their star
+
+        acct = APIClient(enforce_csrf_checks=False)
+        acct.post("/api/auth/register/", {"email": "pv@example.com", "password": "correct-horse-battery-9", "keep_current_resume": "false"}, format="json")
+        self.assertNotIn("Follow up with Initech", acct.get("/api/brief/").json()["next_action"])   # not the guest's follow-up
+        from django.contrib.auth.models import User
+        areq = RequestFactory().get("/"); areq.user = User.objects.get(username="pv@example.com")
+        row = next(j for j in _corpus(areq) if j["job_id"] == "pv1")
+        self.assertFalse(row["starred"])                   # recommendations learn from the account's own stars
+        self.assertEqual(row["app_status"], "New")
+        digest = acct.get("/api/digest/?days=30&min_fit=0").json()
+        self.assertTrue(all(j.get("app_status", "New") == "New" for j in digest.get("jobs", [])), digest)

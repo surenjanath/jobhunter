@@ -41,8 +41,8 @@ def brief(request):
         qs_rows = []
         statuses = {}
         try:
-            for st in ApplicationStatus.objects.using("jobhunt").all():
-                statuses[st.job_id] = st
+            from accounts.context import pipeline_statuses
+            statuses = pipeline_statuses(request)    # this account's own follow-ups / statuses when signed in
         except Exception:
             statuses = {}
         try:

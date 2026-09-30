@@ -696,13 +696,12 @@ def digest(request):
     from src import digest as _dg
     try:
         from . import queries
+        from accounts.context import pipeline_statuses
+        pipe = pipeline_statuses(request)
         rows = []
         for j in queries.base_queryset():
-            try:
-                st = j.applicationstatus.status
-            except Exception:
-                st = "New"
-            rows.append({**{f.attname: getattr(j, f.attname) for f in Job._meta.concrete_fields}, "app_status": st or "New"})
+            st = pipe.get(j.job_id)
+            rows.append({**{f.attname: getattr(j, f.attname) for f in Job._meta.concrete_fields}, "app_status": st.status if st else "New"})
         d = _dg.build(int(request.GET.get("days", 1)), int(request.GET.get("min_fit", 50)), int(request.GET.get("limit", 15)), rows=rows)
     except ValueError:
         return Response({"error": "days, min_fit and limit must be numbers"}, status=400)
