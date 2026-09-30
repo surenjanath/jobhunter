@@ -31,10 +31,15 @@ can open it from your phone or any browser. `render.yaml` in the repository root
 
 ## Keeping it awake
 
-`.github/workflows/keep-alive.yml` pings the site every 14 minutes so the free instance never sleeps. That also means
-far fewer restarts, so the hosted copy keeps its data until the next deploy or platform restart. Turn it on by adding a
-repository variable `RENDER_URL` = `https://<your-service>.onrender.com` (Settings → Secrets and variables → Actions →
-Variables). One always-on free service uses about 744 of Render's 750 free instance-hours a month.
+Ping `https://<your-service>.onrender.com/health/` every 5–14 minutes so the free instance never sleeps. That also
+means far fewer restarts, so the hosted copy keeps its data until the next deploy or platform restart. One always-on
+free service uses about 744 of Render's 750 free instance-hours a month.
+
+- **A free external monitor** (the setup used here, since the repository is private): cron-job.org or UptimeRobot,
+  a GET on `/health/` every 10 minutes. It costs no GitHub Actions minutes.
+- **GitHub Actions**: `.github/workflows/keep-alive.yml` does the same (set the repository variable `RENDER_URL`). It's
+  manual-only while the repository is private: private repos get 2,000 free Actions minutes a month and a 14-minute
+  schedule would use about 3,100. On a public repository you can restore its schedule for free.
 
 ## Settings you can change later
 

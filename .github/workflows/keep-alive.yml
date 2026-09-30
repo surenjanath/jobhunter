@@ -1,3 +1,7 @@
+# MANUAL ONLY since the repository went private: private repos get 2,000 free Actions minutes a month and a
+# ping every 14 minutes would use ~3,100. The site is kept awake by a free external monitor instead (docs/DEPLOY.md).
+# To bring the schedule back (e.g. if the repo goes public again), restore:   schedule: [{cron: "*/14 * * * *"}]
+#
 # Keep the Render free instance awake: it sleeps after ~15 idle minutes, and on the free plan (no disk) every wake-up
 # is a restart that wipes the hosted copy's data. A ping every 14 minutes keeps it up, so data lasts until the next
 # deploy or platform restart, scheduled re-scans keep running, and the site opens instantly.
@@ -10,8 +14,6 @@
 name: Keep Render awake
 
 on:
-  schedule:
-    - cron: "*/14 * * * *"
   workflow_dispatch:
 
 permissions: {}
