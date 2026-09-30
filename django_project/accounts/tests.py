@@ -288,3 +288,27 @@ class AccountPipelineViewsTests(ScannerDBTestCase):
         self.assertEqual(row["app_status"], "New")
         digest = acct.get("/api/digest/?days=30&min_fit=0").json()
         self.assertTrue(all(j.get("app_status", "New") == "New" for j in digest.get("jobs", [])), digest)
+
+
+class AccountLedgerOrderTests(ScannerDBTestCase):
+    """/api/jobs/ sorts and filters on the account's OWN fit/status, not the shared scan's."""
+    def test_order_and_filters_use_account_values(self):
+        from django.contrib.auth.models import User
+        from accounts.models import UserJobMatch, UserJobStatus
+        self.make_job("lo1", title="Shared favourite", company="A", fit_score=90)
+        self.make_job("lo2", title="My favourite", company="B", fit_score=40)
+        acct = APIClient(enforce_csrf_checks=False)
+        acct.post("/api/auth/register/", {"email": "lo@example.com", "password": "correct-horse-battery-9", "keep_current_resume": "false"}, format="json")
+        u = User.objects.get(username="lo@example.com")
+        UserJobMatch.objects.create(user=u, job_id="lo1", fit_score=30, likelihood=10, interview_chance=5)
+        UserJobMatch.objects.create(user=u, job_id="lo2", fit_score=85, likelihood=60, interview_chance=40)
+        UserJobStatus.objects.create(user=u, job_id="lo2", status="Applied", starred=True)
+
+        first = acct.get("/api/jobs/?sort=fit&page_size=1").json()["results"][0]
+        self.assertEqual(first["job_id"], "lo2")                                      # account's best, not the shared one
+        self.assertEqual([r["job_id"] for r in acct.get("/api/jobs/?min_score=50").json()["results"]], ["lo2"])
+        self.assertEqual([r["job_id"] for r in acct.get("/api/jobs/?status=Applied").json()["results"]], ["lo2"])
+        self.assertEqual([r["job_id"] for r in acct.get("/api/jobs/?starred=1").json()["results"]], ["lo2"])
+        self.assertEqual(acct.get("/api/jobs/?sort=fit").json()["count"], 2)
+        # guests: shared order, unchanged
+        self.assertEqual(APIClient().get("/api/jobs/?sort=fit&page_size=1").json()["results"][0]["job_id"], "lo1")

@@ -54,10 +54,8 @@ interviews and inbox suggestions (guests share one set, the same way guests shar
 - **Multi-version resume history**, **manual overrides** (correcting extracted skills), **re-indexing with an
   embedding model**, and **LLM resume enrichment** are features of the shared/anonymous profile only. An
   account's resume is a single version with keyword (BM25) retrieval; no embeddings, no override diffing.
-- **Sorting and pagination** in the Ledger still order by the shared scan's fit score, even when signed in — a
-  signed-in account's own fit/odds numbers shown per row are correct, but *which* jobs land on page 1 vs page 2
-  follows the shared ranking. Fixing this properly needs a cross-database query (SQLite's `ATTACH DATABASE`,
-  since `jobs` and `UserJobMatch` live in two separate files) and wasn't attempted here.
+- ~~**Sorting and pagination** followed the shared scan's fit score~~ — fixed: for a signed-in account `/api/jobs/`
+  filters (status, starred, tier, minimum fit/odds) and sorts (fit, odds, interview chance) on the account's own values.
 - **No email verification, no password-reset-by-email.** This project ships with no outbound mail configured —
   it's a local-first tool, not a hosted service. A forgotten password today means asking whoever runs the
   Django admin (`/admin/`) to reset it by hand.

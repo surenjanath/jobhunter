@@ -87,6 +87,44 @@ def stats(request):
         return Response({"error": str(e)}, status=500)
 
 
+_PERSONAL_PARAMS = ("tier", "min_score", "min_likelihood", "status", "starred")
+_PERSONAL_SORTS = {"fit": ("fit_score",), "likelihood": ("likelihood_score", "fit_score"), "chance": ("interview_chance", "fit_score")}
+
+
+def _job_list_for_account(request, paginator):
+    """Signed in: fit, odds, status and stars are this account's own (UserJobMatch / UserJobStatus, a separate
+    database from the jobs table), so the filters and sorts that use them run on the overlaid rows here rather than
+    in SQL against the shared values. Everything else still filters in SQL first."""
+    from accounts.context import overlay_for
+    from . import queries
+    shared = request.GET.copy()
+    for k in _PERSONAL_PARAMS:
+        shared.pop(k, None)
+    qs = queries.apply_sort(queries.apply_filters(queries.base_queryset(), shared), request.GET)
+    try:
+        jobs_ = list(qs[:5000])
+    except Exception as e:  # noqa: BLE001
+        return Response({"error": f"db error: {e}"}, status=500)
+    status_map, match_map = overlay_for(request, [j.job_id for j in jobs_])
+    rows = [queries.serialize(j, status_map.get(j.job_id), match_map.get(j.job_id)) for j in jobs_]
+    g = request.GET
+    floor = max([int(v) for v in (g.get("tier"), g.get("min_score")) if v and str(v).isdigit()] or [0])
+    if floor:
+        rows = [r for r in rows if (r.get("fit_score") or 0) >= floor]
+    if str(g.get("min_likelihood") or "").isdigit():
+        rows = [r for r in rows if (r.get("likelihood_score") or 0) >= int(g["min_likelihood"])]
+    wanted = queries._multi(g, "status")
+    if wanted:
+        rows = [r for r in rows if (r.get("app_status") or "New") in wanted]
+    if (g.get("starred") or "").lower() in queries.TRUTHY:
+        rows = [r for r in rows if r.get("starred")]
+    keys = _PERSONAL_SORTS.get((g.get("sort") or "fit").strip().lower())
+    if keys:   # stable sort: ties keep the SQL order (company, …)
+        rows.sort(key=lambda r: tuple(-(r.get(k) or 0) for k in keys))
+    page = paginator.paginate_queryset(rows, request)
+    return paginator.get_paginated_response(page)
+
+
 @api_view(["GET"])
 def job_list(request):
     """Paginated jobs. Filters: search, source, tier, min_score, remote, local, region, category, company,
@@ -94,11 +132,13 @@ def job_list(request):
     page_size (max 200)."""
     from rest_framework.pagination import PageNumberPagination
     from . import queries
-    qs = queries.apply_sort(queries.apply_filters(queries.base_queryset(), request.GET), request.GET)
     paginator = PageNumberPagination()
     paginator.page_size = 50
     paginator.page_size_query_param = "page_size"
     paginator.max_page_size = 200
+    if request.user.is_authenticated:
+        return _job_list_for_account(request, paginator)
+    qs = queries.apply_sort(queries.apply_filters(queries.base_queryset(), request.GET), request.GET)
     try:
         page = paginator.paginate_queryset(qs, request)
     except Exception as e:  # e.g. missing table on a fresh install — always JSON
