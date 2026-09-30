@@ -41,6 +41,14 @@ class ScannerDBTestCase(TestCase):
             raw.commit()
         super().setUpClass()
 
+    def _pre_setup(self):
+        # login/registration throttles count in the cache, which outlives each test's database rollback: without
+        # this, the 21st test to register an account gets a 429 and silently carries on as a guest. _pre_setup runs
+        # before every test even when a subclass's setUp() doesn't call super().
+        super()._pre_setup()
+        from django.core.cache import cache
+        cache.clear()
+
     def make_job(self, job_id, **kw):
         from jobs.models import Job
         today = date.today()
