@@ -204,3 +204,40 @@ class LoginThrottleTests(TestCase):
         from rest_framework.test import APIClient
         r = APIClient().post("/api/auth/login/", {"email": "victim@example.com", "password": "correct-horse-battery-9"}, format="json")
         self.assertEqual(r.status_code, 200)
+
+
+class AccountResumeIsolationTests(ScannerDBTestCase):
+    """Every feature that reads 'the resume' must use the signed-in account's own resume, never the shared guest one
+    (regression: interview questions quoted the shared resume's bullets to every account)."""
+    def setUp(self):
+        from src import profile_store
+        profile_store.import_resume(RESUME.encode(), "jane.md", embed=False)     # the shared/guest resume: Jane, Python dev
+        self.job = self.make_job("iso1", title="Senior Python Developer",
+                                 description="Requirements\n- 3+ years Python and Django\n- PostgreSQL\n- Docker\n- Negotiation with vendors",
+                                 category="Technology", region="", location="Remote", remote=True)
+        self.guest = APIClient()
+        self.acct = APIClient(enforce_csrf_checks=False)
+        self.acct.post("/api/auth/register/", {"email": "alex@example.com", "password": "correct-horse-battery-9", "keep_current_resume": "false"}, format="json")
+        self.acct.post("/api/profile/resume/", {"text": SALES_RESUME, "filename": "alex.md"}, format="json")
+
+    def test_interview_questions_use_the_accounts_resume(self):
+        g = json.dumps(self.guest.get("/api/jobs/iso1/interview/").json())
+        a = json.dumps(self.acct.get("/api/jobs/iso1/interview/").json())
+        self.assertIn("Django REST APIs", g)                 # guest: Jane's bullet
+        self.assertNotIn("Django REST APIs", a)              # account: never Jane's bullet
+        self.assertNotIn("Jane", a)
+
+    def test_resume_review_and_ats_use_the_accounts_resume(self):
+        acct_review, guest_review = self.acct.get("/api/profile/review/").json(), self.guest.get("/api/profile/review/").json()
+        self.assertNotIn("Django REST APIs", json.dumps(acct_review))
+        self.assertEqual(acct_review["stats"]["bullets"], 3)                   # Alex's resume has exactly 3 bullets
+        self.assertNotEqual(acct_review["stats"], guest_review["stats"])      # reviewed Alex's resume, not Jane's
+        ats_a = self.acct.get("/api/jobs/iso1/ats/").json()
+        ats_g = self.guest.get("/api/jobs/iso1/ats/").json()
+        self.assertNotEqual(json.dumps(ats_a, sort_keys=True), json.dumps(ats_g, sort_keys=True))
+
+    def test_guest_is_unchanged_after_an_account_request(self):
+        self.acct.get("/api/jobs/iso1/interview/")
+        from src import profile_store
+        self.assertIsNone(profile_store.request_resume())    # the override never leaks past the request
+        self.assertEqual(profile_store.active_profile()["_filename"], "jane.md")

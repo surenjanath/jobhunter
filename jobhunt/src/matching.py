@@ -765,7 +765,12 @@ def get_context(cfg: dict | None = None, ttl: float = 5.0) -> dict | None:
 
 
 def current_context(deep_cfg: bool = True) -> dict | None:
-    """The scoring context using the on-disk profile config (targets etc.). None if no resume has been added."""
+    """The scoring context using the on-disk profile config (targets etc.). None if no resume has been added.
+    During a signed-in request, the account's own context (see profile_store.use_request_resume)."""
+    from src import profile_store
+    ov = profile_store.request_resume()
+    if ov and ov.get("ctx_fn"):
+        return ov["ctx_fn"]()
     try:
         from src import config
         return get_context(config.load_profile())

@@ -47,13 +47,10 @@ interviews and inbox suggestions (guests share one set, the same way guests shar
 ## Known gaps (documented, not silently skipped)
 
 - **CSV export** (`/api/jobs/export/`) always uses the shared scan's data, for every account.
-- **The deeper analysis** behind the Tech/Needs/ATS/Interview/Salary tabs (keyword matching, generated interview
-  questions, salary comparison) and **cover letter drafting** still read the shared instance-wide resume, even
-  for a signed-in account with its own resume — only the headline fit score on those tabs is personalized. The
-  Match tab is the one place that's fully personalized end to end.
-- **AI features** (`ai/views.py` — summary, rewrite, practice, outreach, recommendations, resume review, ask,
-  roadmap) and **Analytics** are not account-aware; they operate on the shared instance-wide resume for every
-  request, signed in or not.
+- ~~Deeper job-dialog analysis, cover letters, AI features and Analytics reading the shared resume~~ — fixed:
+  `accounts/middleware.py` installs the signed-in account's own resume for the whole request, so everything that reads
+  "the resume" (interview prep, AI features, ATS, tailoring, cover letters, analytics) uses the account's own data.
+  Accounts without an uploaded resume, and guests, still use the shared one.
 - **Multi-version resume history**, **manual overrides** (correcting extracted skills), **re-indexing with an
   embedding model**, and **LLM resume enrichment** are features of the shared/anonymous profile only. An
   account's resume is a single version with keyword (BM25) retrieval; no embeddings, no override diffing.

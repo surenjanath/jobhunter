@@ -15,6 +15,7 @@ import json
 import logging
 import threading
 import time
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -70,7 +71,36 @@ DEFAULT_PREFS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# per-request resume: a signed-in account's own resume, installed for the length of one web request by
+# django_project/accounts/middleware.py. Everything that reads "the resume" through this module — matching,
+# interview prep, AI features, cover letters, ATS, analytics — then sees that account's data, not the shared
+# guest resume. A ContextVar, so concurrent requests (threads) never see each other's value.
+# ACCOUNT_RESUME_ID can't exist in resume_versions: any write keyed on it touches nothing.
+# ---------------------------------------------------------------------------
+
+ACCOUNT_RESUME_ID = -1
+_REQUEST_RESUME: ContextVar[dict | None] = ContextVar("jobhunt_request_resume", default=None)
+
+
+def use_request_resume(profile: dict, text: str, prefs: dict | None = None, ctx_fn=None):
+    """Install an account's resume for the current request. Returns a token for reset_request_resume()."""
+    prof = dict(profile or {}, _resume_id=ACCOUNT_RESUME_ID, _filename=(profile or {}).get("_filename", "your resume"))
+    return _REQUEST_RESUME.set({"profile": prof, "text": text or "", "prefs": prefs, "ctx_fn": ctx_fn})
+
+
+def reset_request_resume(token) -> None:
+    _REQUEST_RESUME.reset(token)
+
+
+def request_resume() -> dict | None:
+    return _REQUEST_RESUME.get()
+
+
 def get_prefs() -> dict:
+    ov = _REQUEST_RESUME.get()
+    if ov and ov.get("prefs"):
+        return {**DEFAULT_PREFS, **ov["prefs"]}
     try:
         raw = (yaml.safe_load(PROFILE_YAML.read_text()) or {}).get("preferences") or {}
     except Exception:  # noqa: BLE001
@@ -280,6 +310,9 @@ def update_overrides(rid: int, patch: dict) -> dict:
 
 def active_profile() -> dict | None:
     """The effective profile of the active resume (cached ~5s). None when there is no resume."""
+    ov = _REQUEST_RESUME.get()
+    if ov:
+        return ov["profile"]
     with _lock:
         if _cache["profile"] is not None and time.time() - _cache["stamp"] < _TTL:
             return _cache["profile"]
@@ -295,6 +328,10 @@ def active_profile() -> dict | None:
 
 
 def active_index() -> retrieval.ResumeIndex | None:
+    ov = _REQUEST_RESUME.get()
+    if ov:
+        ctx = ov["ctx_fn"]() if ov.get("ctx_fn") else None
+        return (ctx or {}).get("index")
     prof = active_profile()
     if not prof:
         return None
@@ -369,6 +406,9 @@ def set_llm_enrichment(rid: int, llm_block: dict) -> None:
 
 
 def get_resume_text(rid: int) -> str:
+    ov = _REQUEST_RESUME.get()
+    if ov and rid == ACCOUNT_RESUME_ID:
+        return ov["text"]
     c = db._conn()
     row = c.execute("SELECT text FROM resume_versions WHERE id=?", (rid,)).fetchone()
     c.close()
