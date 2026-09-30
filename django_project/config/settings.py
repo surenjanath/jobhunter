@@ -97,6 +97,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'core.middleware.HealthCheckMiddleware',           # /health/ answered before host/HTTPS checks (platform probes)
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',      # serves /static/ itself when DEBUG is off (no separate web server)
     # compress JSON (the /api/state/ poll is sent every 20s) and answer an unchanged repeat with 304 Not Modified.

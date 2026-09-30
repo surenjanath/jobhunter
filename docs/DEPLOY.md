@@ -29,6 +29,13 @@ can open it from your phone or any browser. `render.yaml` in the repository root
    - `resume.md` (or `resume.pdf` / `resume.docx`): your resume.
 5. Deploy. Open the site, sign in, and give the first scan a few minutes.
 
+## Keeping it awake
+
+`.github/workflows/keep-alive.yml` pings the site every 14 minutes so the free instance never sleeps. That also means
+far fewer restarts, so the hosted copy keeps its data until the next deploy or platform restart. Turn it on by adding a
+repository variable `RENDER_URL` = `https://<your-service>.onrender.com` (Settings → Secrets and variables → Actions →
+Variables). One always-on free service uses about 744 of Render's 750 free instance-hours a month.
+
 ## Settings you can change later
 
 - **Settings page → Site access**: "Allow new accounts" and "Require sign-in". Only your account (the admin) can change

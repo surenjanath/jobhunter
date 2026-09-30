@@ -1,0 +1,34 @@
+# Keep the Render free instance awake: it sleeps after ~15 idle minutes, and on the free plan (no disk) every wake-up
+# is a restart that wipes the hosted copy's data. A ping every 14 minutes keeps it up, so data lasts until the next
+# deploy or platform restart, scheduled re-scans keep running, and the site opens instantly.
+#
+# Setup: repository Settings > Secrets and variables > Actions > Variables > New variable
+#   RENDER_URL = https://<your-service>.onrender.com        (or: gh variable set RENDER_URL --body https://…)
+#
+# Notes: GitHub may run scheduled workflows a few minutes late, and pauses them after 60 days without repository
+# activity (re-enable from the Actions tab). One always-on free service uses ~744 of Render's 750 free hours a month.
+name: Keep Render awake
+
+on:
+  schedule:
+    - cron: "*/14 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /health/
+        env:
+          RENDER_URL: ${{ vars.RENDER_URL }}
+        run: |
+          if [ -z "$RENDER_URL" ]; then
+            echo "::notice::RENDER_URL isn't set yet (Settings > Secrets and variables > Actions > Variables). Skipping."
+            exit 0
+          fi
+          # a sleeping free instance takes up to a minute to start: allow for that, then retry
+          curl -fsS --retry 3 --retry-delay 15 --retry-all-errors --max-time 90 "${RENDER_URL%/}/health/"
+          echo

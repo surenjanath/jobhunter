@@ -61,15 +61,18 @@ def activity(request):
         })
     return Response({"events": rows})
 
-def health(request):
-    """200 whenever the app can serve requests. A missing jobs table is normal on a brand-new or wiped disk (the first
+def health_payload() -> dict:
+    """Up whenever the app can serve requests. A missing jobs table is normal on a brand-new or wiped disk (the first
     scan creates it), so it's reported, not treated as down: a hosting platform would otherwise fail the deploy."""
     try:
         from jobs.models import Job
-        cnt = Job.objects.using("jobhunt").count()
-        return JsonResponse({"ok": True, "jobs": cnt, "backend": "django+sqlite"})
+        return {"ok": True, "jobs": Job.objects.using("jobhunt").count(), "backend": "django+sqlite"}
     except Exception as e:  # noqa: BLE001
-        return JsonResponse({"ok": True, "jobs": 0, "backend": "django+sqlite", "note": f"no jobs yet ({type(e).__name__})"})
+        return {"ok": True, "jobs": 0, "backend": "django+sqlite", "note": f"no jobs yet ({type(e).__name__})"}
+
+
+def health(request):
+    return JsonResponse(health_payload())
 
 
 @api_view(["GET", "PUT"])

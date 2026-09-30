@@ -254,3 +254,14 @@ class AlertTests(ScannerDBTestCase):
         self.assertIn("channels", guest.get("/api/alerts/").json())
         with mock.patch.dict("os.environ", {"JOBHUNTER_TELEGRAM_TOKEN": "t", "JOBHUNTER_TELEGRAM_CHAT_ID": "1"}):
             self.assertEqual(guest.post("/api/alerts/", {"action": "test"}, format="json").status_code, 403)
+
+
+class HealthProbeTests(TestCase):
+    """A platform's internal probe (odd Host header, plain HTTP) must get 200, even with production settings."""
+    def test_health_ignores_host_and_https_redirect(self):
+        from django.test import override_settings
+        with override_settings(ALLOWED_HOSTS=["jobhunter.onrender.com"], SECURE_SSL_REDIRECT=True, DEBUG=False):
+            r = self.client.get("/health/", HTTP_HOST="10.201.3.7:10000")
+            self.assertEqual(r.status_code, 200)
+            self.assertTrue(r.json()["ok"])
+            self.assertEqual(self.client.get("/ledger/", HTTP_HOST="10.201.3.7:10000").status_code, 400)   # everything else still checked
