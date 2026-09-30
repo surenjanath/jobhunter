@@ -21,6 +21,16 @@ ledger = _page("pages/ledger.html", "jobs", "Ledger")
 pipeline = _page("pages/pipeline.html", "pipeline", "Pipeline")
 analytics_page = _page("pages/analytics.html", "analytics", "Analytics")
 profile_page = _page("pages/profile.html", "profile", "Profile")
+@ensure_csrf_cookie
+def login_page(request):
+    """The sign-in page for private mode (JOBHUNTER_PRIVATE=1). Standalone: no shell, nothing that needs sign-in."""
+    from . import site
+    nxt = request.GET.get("next") or "/"
+    if not nxt.startswith("/") or nxt.startswith("//"):
+        nxt = "/"   # only same-site redirects after sign-in
+    return render(request, "pages/login.html", {"next": nxt, "page_title": "Sign in", "signup": site.get()["allow_signup"]})
+
+
 interview_page = _page("pages/interview.html", "interview", "Interview")
 trinidad_page = _page("pages/trinidad.html", "trinidad", "Trinidad")
 settings_page = _page("pages/settings.html", "settings", "Settings")
@@ -51,12 +61,14 @@ def activity(request):
     return Response({"events": rows})
 
 def health(request):
+    """200 whenever the app can serve requests. A missing jobs table is normal on a brand-new or wiped disk (the first
+    scan creates it), so it's reported, not treated as down: a hosting platform would otherwise fail the deploy."""
     try:
         from jobs.models import Job
         cnt = Job.objects.using("jobhunt").count()
         return JsonResponse({"ok": True, "jobs": cnt, "backend": "django+sqlite"})
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+    except Exception as e:  # noqa: BLE001
+        return JsonResponse({"ok": True, "jobs": 0, "backend": "django+sqlite", "note": f"no jobs yet ({type(e).__name__})"})
 
 
 @api_view(["GET", "PUT"])
@@ -89,3 +101,31 @@ def settings_view(request):
 
 def api_not_found(request):
     return JsonResponse({"error": f"no such API endpoint: {request.path}"}, status=404)
+
+
+@api_view(["GET", "PUT"])
+def site_view(request):
+    """Site access switches for the Settings page. PUT {allow_signup?, require_signin?} (admin only, see core.site)."""
+    from . import site
+    from .models import SiteConfig
+    user = request.user
+    if request.method == "PUT":
+        if not site.can_edit(user):
+            return Response({"error": "only an admin account can change site access"}, status=403)
+        d = request.data if isinstance(request.data, dict) else {}
+        row, _ = SiteConfig.objects.get_or_create(pk=1)
+        if "allow_signup" in d:
+            row.allow_signup = bool(d["allow_signup"])
+        if "require_signin" in d:
+            want = bool(d["require_signin"])
+            if want and not user.is_authenticated:
+                return Response({"error": "sign in first: turning this on while signed out would lock you out"}, status=400)
+            row.require_signin = want
+        row.updated_by = user.email if user.is_authenticated else "guest"
+        row.save()
+        if user.is_authenticated and not user.is_staff:   # the first person to set this up becomes the admin
+            user.is_staff = True
+            user.save(update_fields=["is_staff"])
+        site.invalidate()
+    return Response({**site.get(), "can_edit": site.can_edit(user), "signed_in": user.is_authenticated,
+                     "is_admin": bool(user.is_authenticated and user.is_staff)})

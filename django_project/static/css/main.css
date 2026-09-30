@@ -477,3 +477,16 @@ mark.hl.have{background:rgba(127,127,120,.18)}
   .iv-log{max-height:52vh;padding:10px}
   .iv-answer .actions,.iv-report .actions{gap:8px}
 }
+/* ---- sign-in page (private mode) ----------------------------------------------------------------------------------- */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.login-card{width:min(360px,100%);display:grid;gap:14px}
+.login-card h1{margin:0;font-size:22px;font-weight:500}
+.login-card label{display:grid;gap:4px;font-size:13px;color:var(--mute)}
+.login-card input{padding:9px 10px;border:1px solid var(--rule);background:var(--canvas);color:var(--ink);font-size:15px}
+.login-card button.go{border:1px solid var(--ink);padding:9px 12px}
+.login-err{color:#b4533c;min-height:1.2em;margin:0}
+
+/* Settings: site access switches */
+.site-toggle{display:block;margin:6px 0 10px;line-height:1.5}
+.site-toggle input{margin-right:6px;vertical-align:-1px}
+.site-toggle .co{display:block;margin-left:22px}

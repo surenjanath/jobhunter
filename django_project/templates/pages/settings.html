@@ -32,6 +32,14 @@
             </label>
           </div>
         </div>
+        <div class="block" style="margin-top:18px" id="siteAccess">
+          <h3>Site access</h3>
+          <label class="site-toggle"><input type="checkbox" id="siteSignup"> <b>Allow new accounts</b>
+            <span class="co">Anyone who opens this site can create an account. Turn off once your own account exists.</span></label>
+          <label class="site-toggle"><input type="checkbox" id="siteSignin"> <b>Require sign-in</b>
+            <span class="co">Every page needs an account: guests see only the sign-in page. Use this for a copy on the internet.</span></label>
+          <div class="co" id="siteNote"></div>
+        </div>
         <div class="block" style="margin-top:18px">
           <h3>Sources</h3>
           <div id="sourcesGrid" style="display:flex;flex-wrap:wrap;gap:8px 14px"></div>
@@ -61,5 +69,5 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/settings.js' %}?v=2"></script>
+<script src="{% static 'js/settings.js' %}?v=3"></script>
 {% endblock %}

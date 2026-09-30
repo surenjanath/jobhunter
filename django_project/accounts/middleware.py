@@ -27,3 +27,26 @@ class AccountResumeMiddleware:
             return self.get_response(request)
         finally:
             profile_store.reset_request_resume(token)
+
+
+class PrivateSiteMiddleware:
+    """settings.JOBHUNTER_PRIVATE: every page and API needs a signed-in user. Pages redirect to /login/, API calls get
+    a JSON 401. Only sign-in itself, the health check and static files stay open. Off by default (local use)."""
+    OPEN = ("/login/", "/api/auth/login/", "/api/auth/me/", "/health", "/static/", "/favicon")
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from core import site
+        if request.path.startswith(self.OPEN) or not site.get()["require_signin"]:
+            return self.get_response(request)
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated:
+            return self.get_response(request)
+        if request.path.startswith("/api/"):
+            from django.http import JsonResponse
+            return JsonResponse({"error": "sign in required"}, status=401)
+        from urllib.parse import quote
+        from django.shortcuts import redirect
+        return redirect(f"/login/?next={quote(request.get_full_path())}")

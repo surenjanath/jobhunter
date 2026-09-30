@@ -47,7 +47,9 @@ class ScannerDBTestCase(TestCase):
         # before every test even when a subclass's setUp() doesn't call super().
         super()._pre_setup()
         from django.core.cache import cache
+        from core import site
         cache.clear()
+        site.invalidate()   # the Settings-page access switches are cached in memory for a few seconds
 
     def make_job(self, job_id, **kw):
         from jobs.models import Job

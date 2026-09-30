@@ -54,6 +54,26 @@ DEBUG = os.environ.get('DJANGO_DEBUG', '1') not in ('0', 'false', 'False', '')
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,[::1],testserver").split(",") if h.strip()]
 
+# --- hosted (Render or similar) --------------------------------------------------------------------------------------
+# Render sets RENDER_EXTERNAL_HOSTNAME; any host behind a TLS-terminating proxy can set DJANGO_ALLOWED_HOSTS instead.
+_RENDER_HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
+if _RENDER_HOST:
+    ALLOWED_HOSTS.append(_RENDER_HOST)
+CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in ALLOWED_HOSTS if h not in ("127.0.0.1", "localhost", "[::1]", "testserver")]
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = os.environ.get("DJANGO_SSL_REDIRECT", "1") not in ("0", "false", "False")
+    SECURE_REDIRECT_EXEMPT = [r"^health/?$"]          # the platform's health check speaks plain HTTP inside
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
+    SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", "3600"))
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SESSION_COOKIE_HTTPONLY = True
+
+# Private mode: the whole site (pages and API) needs sign-in, and nobody can create an account through the site.
+# Meant for hosting your own copy: set JOBHUNTER_PRIVATE=1 and create the owner with JOBHUNTER_OWNER_EMAIL/PASSWORD.
+JOBHUNTER_PRIVATE = os.environ.get("JOBHUNTER_PRIVATE", "0") in ("1", "true", "True", "yes")
+JOBHUNTER_ALLOW_SIGNUP = os.environ.get("JOBHUNTER_ALLOW_SIGNUP", "0" if JOBHUNTER_PRIVATE else "1") in ("1", "true", "True", "yes")
+
 
 # Application definition
 
@@ -78,6 +98,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',      # serves /static/ itself when DEBUG is off (no separate web server)
     # compress JSON (the /api/state/ poll is sent every 20s) and answer an unchanged repeat with 304 Not Modified.
     # Django's GZip adds random padding to each response (mitigates BREACH on pages that carry the CSRF token).
     'django.middleware.gzip.GZipMiddleware',
@@ -86,6 +107,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.PrivateSiteMiddleware',      # JOBHUNTER_PRIVATE=1: everything behind sign-in
     'accounts.middleware.AccountResumeMiddleware',   # a signed-in account's resume, for everything this request reads
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -165,6 +187,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# compressed (gzip/brotli) copies made at collectstatic; no manifest hashing, since templates already version with ?v=
+STORAGES = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"}}
 
 # DRF
 REST_FRAMEWORK = {

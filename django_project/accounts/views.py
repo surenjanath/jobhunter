@@ -47,14 +47,20 @@ def _user_out(user) -> dict:
 
 @api_view(["GET"])
 def me(request):
+    from core import site as _site
+    s = _site.get()
+    site = {"signup_open": s["allow_signup"], "private": s["require_signin"]}
     if request.user.is_authenticated:
-        return Response({"authenticated": True, **_user_out(request.user)})
-    return Response({"authenticated": False})
+        return Response({"authenticated": True, **_user_out(request.user), **site})
+    return Response({"authenticated": False, **site})
 
 
 @api_view(["POST"])
 @throttle_classes([_RegisterThrottle])
 def register(request):
+    from core import site
+    if not site.get()["allow_signup"]:
+        return Response({"error": "sign-ups are turned off on this site"}, status=403)
     email = str(request.data.get("email") or "").strip().lower()
     password = str(request.data.get("password") or "")
     if not EMAIL_RE.match(email):

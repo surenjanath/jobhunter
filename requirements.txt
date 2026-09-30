@@ -10,6 +10,8 @@ PyYAML>=6.0.1
 gspread>=6.1.0          # Google Sheets sync
 google-auth>=2.29.0     # Google Sheets auth
 anthropic>=0.40.0       # Anthropic API backend for cover letters / AI features
+gunicorn>=23.0          # production web server (hosted copies; scripts/render-start.sh)
+whitenoise>=6.7         # serves static files when DEBUG is off
 flask>=3.0.0            # legacy Flask dashboard (jobhunt/dashboard.py) only
 
 # NOT installed by the line above (a ~350 MB voice model — too heavy to force on everyone for one feature): the

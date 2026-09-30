@@ -84,3 +84,70 @@ class ApiNotFoundTests(TestCase):
 
     def test_pages_have_an_icon(self):
         self.assertIn('rel="icon"', self.client.get("/ledger/").content.decode())
+
+
+class SiteAccessTests(TestCase):
+    """The Settings page's 'Allow new accounts' / 'Require sign-in' switches, and who may flip them."""
+    def setUp(self):
+        from django.core.cache import cache
+        from core import site
+        cache.clear()
+        site.invalidate()
+
+    def tearDown(self):
+        from core import site
+        site.invalidate()
+
+    def _client(self, email=None, staff=False):
+        from django.contrib.auth.models import User
+        from rest_framework.test import APIClient
+        c = APIClient()
+        if email:
+            u = User.objects.create_user(username=email, email=email, password="correct-horse-battery-9", is_staff=staff)
+            c.force_authenticate(u)
+            c.force_login(u)
+        return c
+
+    def test_defaults_are_open_locally(self):
+        d = self._client().get("/api/site/").json()
+        self.assertTrue(d["allow_signup"])
+        self.assertFalse(d["require_signin"])
+        self.assertTrue(d["can_edit"])          # no admin yet: a fresh local copy can be set up
+
+    def test_guest_cannot_lock_the_site(self):
+        r = self._client().put("/api/site/", {"require_signin": True}, format="json")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("sign in first", r.json()["error"])
+
+    def test_first_signed_in_editor_becomes_admin_and_others_are_locked_out(self):
+        from django.contrib.auth.models import User
+        me = self._client("me@example.com")
+        self.assertEqual(me.put("/api/site/", {"allow_signup": False}, format="json").status_code, 200)
+        self.assertTrue(User.objects.get(username="me@example.com").is_staff)
+        other = self._client("other@example.com")
+        self.assertEqual(other.put("/api/site/", {"allow_signup": True}, format="json").status_code, 403)
+        self.assertFalse(other.get("/api/site/").json()["can_edit"])
+        # and sign-ups really are off
+        from rest_framework.test import APIClient
+        r = APIClient().post("/api/auth/register/", {"email": "new@example.com", "password": "correct-horse-battery-9"}, format="json")
+        self.assertEqual(r.status_code, 403)
+
+    def test_require_signin_locks_pages_and_api_but_not_sign_in(self):
+        admin = self._client("admin@example.com", staff=True)
+        admin.put("/api/site/", {"require_signin": True}, format="json")
+        guest = self.client
+        r = guest.get("/ledger/")
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(r["Location"].startswith("/login/?next=/ledger/"))
+        self.assertEqual(guest.get("/api/state/").status_code, 401)
+        self.assertEqual(guest.get("/login/").status_code, 200)
+        self.assertEqual(guest.get("/health/").status_code, 200)
+        self.assertEqual(guest.get("/api/auth/me/").json()["private"], True)
+        # signing in gets you in
+        ok = guest.post("/api/auth/login/", {"email": "admin@example.com", "password": "correct-horse-battery-9"}, content_type="application/json")
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(guest.get("/ledger/").status_code, 200)
+
+    def test_login_page_only_redirects_within_the_site(self):
+        html = self.client.get("/login/?next=//evil.example.com/").content.decode()
+        self.assertIn("const next='/'", html)

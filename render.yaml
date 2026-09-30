@@ -1,0 +1,30 @@
+# Render Blueprint: New > Blueprint > this repo. Then, in the service's settings:
+#   Environment: set JOBHUNTER_OWNER_EMAIL and JOBHUNTER_OWNER_PASSWORD (12+ characters) — that's your sign-in.
+#   Secret Files: add profile.yaml (your jobhunt/config/profile.yaml) and resume.md (or .pdf/.docx).
+# Free plan: no persistent disk. Every restart (including waking from idle) starts empty and rebuilds from the
+# above plus a fresh scan; statuses and notes made on the hosted copy don't survive. See docs/DEPLOY.md.
+services:
+  - type: web
+    name: jobhunter
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && cd django_project && python manage.py collectstatic --noinput
+    startCommand: bash scripts/render-start.sh
+    healthCheckPath: /health/
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.7"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: JOBHUNTER_PRIVATE          # whole site behind sign-in, no public sign-ups
+        value: "1"
+      - key: JOBHUNTER_OWNER_EMAIL
+        sync: false
+      - key: JOBHUNTER_OWNER_PASSWORD
+        sync: false
+      - key: JOBHUNTER_SCAN_EVERY_HOURS
+        value: "12"
+      - key: ANTHROPIC_API_KEY          # optional: AI features (otherwise the built-in rules do the work)
+        sync: false

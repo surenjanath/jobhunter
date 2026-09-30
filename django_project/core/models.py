@@ -17,3 +17,15 @@ class StatusEvent(models.Model):
 
     def __str__(self):
         return f"{self.company}: {self.from_status} → {self.to_status}"
+
+
+class SiteConfig(models.Model):
+    """Site-wide access switches, set from the Settings page (one row). A field left NULL falls back to the
+    environment default (JOBHUNTER_PRIVATE / JOBHUNTER_ALLOW_SIGNUP), so a fresh hosted copy starts as configured."""
+    allow_signup = models.BooleanField(null=True, blank=True)
+    require_signin = models.BooleanField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.CharField(max_length=254, blank=True, default="")
+
+    def __str__(self):
+        return f"signup={self.allow_signup} signin={self.require_signin}"

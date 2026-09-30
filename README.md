@@ -203,6 +203,7 @@ Each page is its own Django template (`templates/pages/`) with its own script (`
 - [API](docs/API.md): the JSON endpoints behind the UI
 - [Scheduling scans](docs/SCHEDULING.md): cron / launchd, instead of clicking Scan in the UI
 - [Accounts](docs/ACCOUNTS.md): what's private per account, what stays shared, and known gaps
+- [Deploying to Render](docs/DEPLOY.md): a private hosted copy, and what the free plan does and doesn't keep
 - [Contributing](CONTRIBUTING.md)
 
 ## Testing

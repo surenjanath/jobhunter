@@ -59,4 +59,25 @@ async function saveSettings(){
 }
 const _saveBtn=document.getElementById('settingsSave'); if(_saveBtn) _saveBtn.onclick=saveSettings;
 const _reloadBtn=document.getElementById('settingsReload'); if(_reloadBtn) _reloadBtn.onclick=loadSettings;
-Object.assign(PAGE_HOOKS,{ init:()=>loadSettings(), refresh:()=>{} });
+// ---- site access (who can sign up, whether guests get in) -------------------------------------------------------------
+async function loadSiteAccess(){
+  const up=$('#siteSignup'), rq=$('#siteSignin'), note=$('#siteNote'); if(!up) return;
+  let s; try{ s=await jfetch('/api/site/'); }catch(e){ note.textContent=e.message; return; }
+  up.checked=s.allow_signup; rq.checked=s.require_signin;
+  up.disabled=rq.disabled=!s.can_edit;
+  note.textContent=!s.can_edit?'Only an admin account can change these.'
+    :s.is_admin?'You are this site\'s admin.'
+    :s.signed_in?'No admin yet: the first change you make here makes your account the admin.'
+    :'No admin yet. Sign in (or create an account) before turning on "Require sign-in".';
+  const save=async(field,el)=>{
+    const want=el.checked;
+    try{ const r=await jfetch('/api/site/',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:want})});
+      toast(field==='allow_signup'?(want?'New accounts allowed':'Sign-ups turned off'):(want?'Sign-in now required':'Guests can use the site'));
+      if(typeof loadAuth==='function') loadAuth();
+      up.checked=r.allow_signup; rq.checked=r.require_signin; loadSiteAccess(); }
+    catch(e){ el.checked=!want; toast(e.message,'bad'); }
+  };
+  up.onchange=()=>save('allow_signup',up);
+  rq.onchange=()=>save('require_signin',rq);
+}
+Object.assign(PAGE_HOOKS,{ init:()=>{ loadSiteAccess(); return loadSettings(); }, refresh:()=>{} });

@@ -30,7 +30,7 @@ class AccountAuthTests(ScannerDBTestCase):
         self.c = APIClient(enforce_csrf_checks=False)
 
     def test_register_login_logout_me(self):
-        self.assertEqual(self.c.get("/api/auth/me/").json(), {"authenticated": False})
+        self.assertFalse(self.c.get("/api/auth/me/").json()["authenticated"])
         r = self.c.post("/api/auth/register/", {"email": "jane@example.com", "password": "correct-horse-battery-9"}, format="json")
         self.assertEqual(r.status_code, 201)
         self.assertTrue(r.json()["ok"])

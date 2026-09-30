@@ -27,7 +27,7 @@ function paintAuthDlg(){
       <p class="co">${AUTH.has_profile?'Your resume, fit scores and pipeline are private to this account.':'You haven’t added a resume to this account yet — the Profile page will let you.'}</p>
       <div class="actions"><button type="button" class="sm" id="authSignOut">Sign out</button></div>`;
     $('#authSignOut').onclick=async()=>{
-      try{ await jfetch('/api/auth/logout/',{method:'POST'}); toast('Signed out'); dlg.close(); AUTH={authenticated:false,email:'',has_profile:false}; paintAuthNav();
+      try{ await jfetch('/api/auth/logout/',{method:'POST'}); if(AUTH.private){ location.href='/login/'; return; } toast('Signed out'); dlg.close(); AUTH={authenticated:false,email:'',has_profile:false}; paintAuthNav();
         if(typeof refreshPage==='function') refreshPage().catch(()=>{}); }
       catch(e){ toast(e.message,'bad'); }
     };
@@ -43,10 +43,10 @@ function paintAuthDlg(){
     ${migrateRow}
     <div class="actions" style="margin-top:14px">
       <button type="button" class="go sm" id="authGo">${isRegister?'Create account':'Sign in'}</button>
-      <button type="button" class="text" id="authSwitch">${isRegister?'Have an account? Sign in':'New here? Create an account'}</button>
+      ${AUTH.signup_open===false?'':`<button type="button" class="text" id="authSwitch">${isRegister?'Have an account? Sign in':'New here? Create an account'}</button>`}
       <span class="urgent" id="authErr"></span>
     </div>`;
-  $('#authSwitch').onclick=()=>{ dlg.dataset.mode=isRegister?'login':'register'; paintAuthDlg(); };
+  const sw=$('#authSwitch'); if(sw) sw.onclick=()=>{ dlg.dataset.mode=isRegister?'login':'register'; paintAuthDlg(); };
   $('#authGo').onclick=async()=>{
     const email=$('#authEmail').value.trim(), password=$('#authPassword').value, err=$('#authErr'), go=$('#authGo');
     err.textContent=''; go.disabled=true; go.textContent='Working…';
