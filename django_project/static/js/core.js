@@ -95,8 +95,17 @@ function setBusy(busy){
   if(s && !busy && !String(s.textContent).startsWith('Failed')){ s.textContent='Idle'; s.classList.remove('busy'); }
   if(busy&&!POLL) POLL=setInterval(pollLogs,700);
 }
+let POLL_FAILS=0;
 async function pollLogs(){
-  const d=await jfetch('/api/logs/?since='+CURSOR);
+  let d;
+  try{ d=await jfetch('/api/logs/?since='+CURSOR); }
+  catch(e){   // server restarting or unreachable: say so and keep trying, instead of throwing every 700ms
+    POLL_FAILS++;
+    const s=$('#liveStatus'); if(s && POLL_FAILS>=3){ s.textContent='Connection lost — retrying…'; s.classList.add('busy'); }
+    return;
+  }
+  if(POLL_FAILS>=3){ const s=$('#liveStatus'); if(s) s.textContent='Reconnected'; }
+  POLL_FAILS=0;
   if(d.lines.length){
     CURSOR=d.next;
     const c=$('#console');
