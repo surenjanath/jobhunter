@@ -66,14 +66,32 @@ an outside provider are opt-in and say so). There is no account and no login.
 **AI features** (every one works with built-in rules; a model, local or hosted, only *polishes* the result and only when you tick "Polish with AI")
 - **Posting summary and red flags**: a plain-words TL;DR, must-haves, "wear many hats" / unpaid / stale / years-vs-level flags, good signs, and questions to ask them.
 - **Bullet rewriter**: your best resume bullets for the posting, re-worded. A guardrail rejects any rewrite that adds a tool, number or claim your original did not contain.
-- **Interview practice, spoken or typed**: answer a likely question by typing or by voice (your browser's own speech
-  recognition — nothing sent anywhere for that part), get scored on STAR structure, numbers, specifics, "I" vs "we"
-  and filler, and optionally have the question and your results read back by a local voice (Kokoro — no cloud,
-  no API key; `pip install kokoro soundfile numpy` to turn it on, works as plain text without it).
+- **Interview coach** (the Interview page, below): spoken mock interviews with an honest read of what you said and how you
+  said it, a story bank, drills, prep plans for real interviews, and your weekly progress.
 - **Outreach drafts**: follow-up, thank-you, recruiter message and referral ask, built from your best matching bullet.
 - **Resume review**: weak openers, missing numbers, buzzwords, gaps, skills listed but never shown, with your own lines as examples.
 - **Similar listings** and **Recommended for you** (learned from what you star and apply to), **plain-English search** in the command palette
   ("remote python roles worth applying", "finance jobs in Chaguanas closing soon") and **learning roadmaps** for each "learn next" skill.
+
+**Interview coach** (`/interview/`)
+- **Spoken mock interviews**: an interviewer reads each question aloud (Kokoro, local, or your browser's voice), you answer
+  out loud (your browser's own speech recognition), and thin answers get a follow-up, from rules or, optionally, an AI
+  interviewer that reacts to what you actually said. Friendly, neutral or tough personas; a realistic mode that cuts in
+  past 2½ minutes and asks for more on a one-liner.
+- **Interview types**: behavioural, recruiter screen, technical, salary negotiation (against a realistic offer from the
+  posted range or what similar roles pay) and "your questions for them", each scored on its own checks.
+- **An honest read**: STAR structure, numbers, filler, a one-line verdict per answer ("this wouldn't get you through yet"),
+  and **composure**: whether you sounded nervous (shaky pitch, a high-pitched start, uptalk, trailing off, rushing,
+  a slow start) with the evidence and a fix. Record a 30-second calm-voice baseline and nerves are judged against
+  *your* voice, not a generic one. Optional camera feedback (eye contact, framing, stillness, smile). Voice and
+  camera are analysed in the browser: no audio or video is uploaded or stored, only summary numbers.
+- **Hear yourself back** after each answer (kept in the page only), print or save the report as PDF, and a history with
+  a trend line.
+- **Stories**: save good answers as STAR stories tagged by skill, and see which of a role's requirements you have a story for.
+- **Drills**: weak answers, and questions you were asked in real interviews, come back on a spaced-repetition schedule.
+- **Real interviews**: a day-by-day prep plan with a research brief, a log afterwards (real vs mock calibration), and an
+  inbox that turns a pasted recruiter email (or `manage.py check_inbox`, read-only IMAP) into a suggested pipeline move you confirm.
+- **Progress**: this week against last: applications, response rate, interviews, practice scores and composure.
 
 **Helps you work the pipeline**
 - Ledger with filters, saved views, multi-select **compare** (up to 4 roles) and bulk actions, keyboard shortcuts,
@@ -170,6 +188,7 @@ Want scans to run on their own instead of clicking Scan in the UI? See [Scheduli
 | `/pipeline/` | Tracked applications, follow-up dates, notes, funnel figures |
 | `/analytics/` | Charts and findings across all listings |
 | `/profile/` | Resume upload, extracted profile and skills editor, preferences, calibration, versions |
+| `/interview/` | Interview coach: spoken mock interviews, stories, drills, real interviews and prep plans, weekly progress |
 | `/trinidad/` | Local market by region / category / employer, board health, add employers |
 | `/settings/` | Sources on/off, thresholds, cover-letter provider |
 
@@ -204,7 +223,9 @@ scanner tests use their own.
 - **Be polite to sites.** Fetchers are rate-limited, use public feeds / sitemaps / APIs where they exist, and only read
   pages that are publicly visible. LinkedIn and Indeed are deliberately **not** scraped (their terms forbid it); use their
   email alerts. Check a site's terms before adding it as a custom source.
-- No login: run it on localhost. If you expose it, put it behind something that authenticates.
+- **Accounts are optional** (guest mode works as before). Passwords are hashed by Django, login is rate-limited, and each
+  install signs sessions with its own random key (set `DJANGO_SECRET_KEY` to choose it). It's still built to run on
+  localhost; if you expose it, set `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS`, and serve it over HTTPS.
 
 ## Project layout
 

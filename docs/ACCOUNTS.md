@@ -34,6 +34,16 @@ Resume upload, preferences, rescoring, the Ledger (`/api/jobs/`, and `/api/state
 array actually loads from), the Match tab, `followups`, `pipeline`, star/status/notes/dismiss-reason, and the
 "Tech / Needs / ATS / Interview / Salary" tabs' headline fit score.
 
+The **interview coach** is private per account too: mock-interview history, voice baseline, stories, drills, real
+interviews and inbox suggestions (guests share one set, the same way guests share one pipeline).
+
+## Security
+
+- Login is rate-limited: 10 attempts a minute from one address, and 20 an hour against any one account email
+  (so spreading guesses over many addresses doesn't help). Registration: 20 an hour per address.
+- Sessions are signed with `DJANGO_SECRET_KEY`, or, if unset, a random key generated once per install and kept next to
+  the Django database (`.django_secret_key`, owner-only, gitignored). The repository never contains a usable key.
+
 ## Known gaps (documented, not silently skipped)
 
 - **CSV export** (`/api/jobs/export/`) always uses the shared scan's data, for every account.

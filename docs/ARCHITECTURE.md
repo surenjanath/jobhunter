@@ -89,7 +89,7 @@ in-place migrations live in `src/db.py`. The Django models for these tables are 
 - **API apps**: `jobs` (jobs, status, filters, export, digest, calendar), `candidate` (resume, preferences, rescoring,
   deep matching), `trinidad` (local market, sources, employer detection), `analytics` (insights, brief), `ai` (summary, rewrite, practice, outreach, recommendations, resume review, ask, roadmap), `accounts` (register/login/logout,
   and the per-account resume/pipeline/fit-score models and overlay used by `jobs` and `candidate` — see
-  [Accounts](ACCOUNTS.md)).
+  [Accounts](ACCOUNTS.md)), `coach` (interview coach: voice baseline, stories, drills, real interviews and prep plans, inbox, weekly progress; logic in `jobhunt/src/coach.py`).
 
 ## Configuration files
 

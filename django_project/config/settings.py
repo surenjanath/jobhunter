@@ -170,6 +170,8 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer", "rest_framework.renderers.BrowsableAPIRenderer"],
+    # password guessing: per address, and per account email (so spreading guesses over many addresses doesn't help)
+    "DEFAULT_THROTTLE_RATES": {"login": "10/min", "login_email": "20/hour", "register": "20/hour"},
 }
 
 # Logging — structured

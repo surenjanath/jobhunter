@@ -165,3 +165,42 @@ class AccountProfileTests(ScannerDBTestCase):
         # the Ledger row now reflects that cached match without a separate rescore
         row = json.loads(self.c.get("/api/jobs/").content)["results"][0]
         self.assertEqual(row["fit_score"], r.json()["match"]["fit"])
+
+
+from django.test import TestCase  # noqa: E402
+
+
+class LoginThrottleTests(TestCase):
+    """Password guessing is rate-limited per address and per account email."""
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        from django.contrib.auth.models import User
+        User.objects.create_user(username="victim@example.com", email="victim@example.com", password="correct-horse-battery-9")
+
+    def tearDown(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_guessing_from_one_address_is_cut_off(self):
+        from rest_framework.test import APIClient
+        c = APIClient()
+        codes = [c.post("/api/auth/login/", {"email": "victim@example.com", "password": f"guess{i}"}, format="json").status_code for i in range(12)]
+        self.assertEqual(codes[:10], [401] * 10)
+        self.assertEqual(codes[10:], [429, 429])
+        # even the right password is refused while throttled: the limit isn't a password oracle
+        self.assertEqual(c.post("/api/auth/login/", {"email": "victim@example.com", "password": "correct-horse-battery-9"}, format="json").status_code, 429)
+
+    def test_guessing_one_account_from_many_addresses_is_cut_off(self):
+        from rest_framework.test import APIClient
+        codes = []
+        for i in range(22):
+            c = APIClient(REMOTE_ADDR=f"10.0.{i // 250}.{i % 250 + 1}")
+            codes.append(c.post("/api/auth/login/", {"email": "victim@example.com", "password": f"guess{i}"}, format="json").status_code)
+        self.assertEqual(codes[:20], [401] * 20)
+        self.assertEqual(codes[20:], [429, 429])
+
+    def test_normal_login_still_works(self):
+        from rest_framework.test import APIClient
+        r = APIClient().post("/api/auth/login/", {"email": "victim@example.com", "password": "correct-horse-battery-9"}, format="json")
+        self.assertEqual(r.status_code, 200)

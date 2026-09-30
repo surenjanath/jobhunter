@@ -9,10 +9,34 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.response import Response
+from rest_framework.throttling import SimpleRateThrottle
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class _LoginEmailThrottle(SimpleRateThrottle):
+    """Counts attempts against one account email, whichever address they come from."""
+    scope = "login_email"
+
+    def get_cache_key(self, request, view):
+        email = str(request.data.get("email") or "").strip().lower()
+        return self.cache_format % {"scope": self.scope, "ident": email} if email else None
+
+
+class _RegisterThrottle(SimpleRateThrottle):
+    scope = "register"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
+class _LoginIPOnly(SimpleRateThrottle):
+    scope = "login"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
 
 def _user_out(user) -> dict:
@@ -29,6 +53,7 @@ def me(request):
 
 
 @api_view(["POST"])
+@throttle_classes([_RegisterThrottle])
 def register(request):
     email = str(request.data.get("email") or "").strip().lower()
     password = str(request.data.get("password") or "")
@@ -51,6 +76,7 @@ def register(request):
 
 
 @api_view(["POST"])
+@throttle_classes([_LoginIPOnly, _LoginEmailThrottle])
 def login_view(request):
     email = str(request.data.get("email") or "").strip().lower()
     password = str(request.data.get("password") or "")
