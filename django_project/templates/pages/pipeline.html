@@ -6,9 +6,12 @@
         <h1 class="sheet-title">Pipeline <span class="quiet">· Follow-ups ·</span></h1>
         <div class="figures" id="pipeFigures"></div>
         <div id="pipelineBody"></div>
+        <div class="block" style="margin-top:26px" id="contactsBlock"><h3>Contacts <span class="quiet">recruiters, referrers, hiring managers</span></h3><div id="contactsBody"></div></div>
+        <div class="block" style="margin-top:26px" id="offersBlock"><h3>Offers <span class="quiet">compared on the whole package, in TT$ a month</span></h3><div id="offersBody"></div></div>
       </section>
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/pipeline.js' %}?v=1"></script>
+<script src="{% static 'js/pipeline.js' %}?v=2"></script>
+<script src="{% static 'js/network.js' %}?v=2"></script>
 {% endblock %}

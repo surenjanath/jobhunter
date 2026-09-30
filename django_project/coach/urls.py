@@ -15,4 +15,8 @@ urlpatterns = [
     path('coach/inbox/parse/', views.inbox_parse, name='coach-inbox-parse'),
     path('coach/inbox/<int:sid>/', views.inbox_resolve, name='coach-inbox-resolve'),
     path('coach/weekly/', views.weekly, name='coach-weekly'),
+    path('coach/contacts/', views.contacts, name='coach-contacts'),
+    path('coach/contacts/<int:cid>/', views.contact, name='coach-contact'),
+    path('coach/offers/', views.offers, name='coach-offers'),
+    path('coach/offers/<int:oid>/', views.offer, name='coach-offer'),
 ]

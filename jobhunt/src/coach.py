@@ -461,3 +461,41 @@ def weekly_report(this: dict, last: dict) -> dict:
     if not reads:
         reads.append("Steady week. Keep the rhythm: apply, practise, follow up.")
     return {"this": this, "last": last, "response_rate": rate, "deltas": {k: delta(k) for k in this}, "reads": reads}
+
+
+# ---------------------------------------------------------------------------
+# offers — compare job offers on the whole package, in one currency
+# ---------------------------------------------------------------------------
+
+def offer_value(o: dict, fx_ttd_per_usd: float) -> dict:
+    """o: {base_monthly, currency ('TT$'|'US$'), bonus_pct, signing, leave_days, remote_days, commute_minutes}.
+    -> the package in TT$ a month (bonus and signing spread over the first year), plus the parts."""
+    rate = fx_ttd_per_usd if (o.get("currency") or "TT$").upper().startswith("US") else 1.0
+    base = float(o.get("base_monthly") or 0) * rate
+    bonus = base * float(o.get("bonus_pct") or 0) / 100
+    signing = float(o.get("signing") or 0) * rate / 12
+    total = base + bonus + signing
+    commute_h_week = float(o.get("commute_minutes") or 0) * 2 * max(0, 5 - int(o.get("remote_days") or 0)) / 60
+    return {"base_ttd": round(base), "bonus_ttd": round(bonus), "signing_ttd": round(signing), "total_ttd": round(total),
+            "leave_days": int(o.get("leave_days") or 0), "remote_days": int(o.get("remote_days") or 0),
+            "commute_hours_week": round(commute_h_week, 1)}
+
+
+def compare_offers(offers: list[dict], fx_ttd_per_usd: float, floor_ttd: float = 0) -> dict:
+    """Rank offers by first-year monthly value, and say plainly what separates them."""
+    rows = [{**o, "value": offer_value(o, fx_ttd_per_usd)} for o in offers]
+    rows.sort(key=lambda r: -r["value"]["total_ttd"])
+    notes = []
+    if len(rows) >= 2:
+        a, b = rows[0], rows[1]
+        gap = a["value"]["total_ttd"] - b["value"]["total_ttd"]
+        notes.append(f"{a.get('company') or 'The top offer'} is worth about TT${gap:,} a month more than {b.get('company') or 'the next'} in year one.")
+        if b["value"]["commute_hours_week"] + 2 < a["value"]["commute_hours_week"]:
+            notes.append(f"But {a.get('company')} costs about {a['value']['commute_hours_week'] - b['value']['commute_hours_week']:g} more hours a week commuting.")
+        if b["value"]["leave_days"] > a["value"]["leave_days"] + 3:
+            notes.append(f"{b.get('company')} gives {b['value']['leave_days'] - a['value']['leave_days']} more days of leave.")
+    for r in rows:
+        r["below_floor"] = bool(floor_ttd and r["value"]["base_ttd"] < floor_ttd)
+    if floor_ttd and any(r["below_floor"] for r in rows):
+        notes.append(f"Offers marked below your floor (TT${floor_ttd:,.0f}/month base) are worth negotiating before you consider them.")
+    return {"offers": rows, "notes": notes, "fx": fx_ttd_per_usd, "floor_ttd": round(floor_ttd or 0)}

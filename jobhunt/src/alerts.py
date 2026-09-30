@@ -27,11 +27,12 @@ def channels() -> dict:
             "telegram": bool(e.get("JOBHUNTER_TELEGRAM_TOKEN") and e.get("JOBHUNTER_TELEGRAM_CHAT_ID"))}
 
 
-def compose(picks: list[dict], followups: list[dict], closing: list[dict], site_url: str = "") -> dict | None:
+def compose(picks: list[dict], followups: list[dict], closing: list[dict], site_url: str = "", reach_out: list[dict] | None = None) -> dict | None:
     """-> {subject, text} or None when there's nothing worth sending.
     picks: [{title, company, fit, verdict, where, url, advice}]  followups: [{title, company, followup_date}]
     closing: [{title, company, expires_at}]"""
-    if not (picks or followups or closing):
+    reach_out = reach_out or []
+    if not (picks or followups or closing or reach_out):
         return None
     parts = []
     bits = []
@@ -41,10 +42,16 @@ def compose(picks: list[dict], followups: list[dict], closing: list[dict], site_
         bits.append(f"{len(followups)} follow-up{'s' if len(followups) > 1 else ''} due")
     if closing:
         bits.append(f"{len(closing)} closing soon")
+    if reach_out:
+        bits.append(f"{len(reach_out)} contact{'s' if len(reach_out) > 1 else ''} to reach out to")
     subject = "JobHunter: " + ", ".join(bits)
     if followups:
         parts.append("FOLLOW UP TODAY")
         parts += [f"- {f['title']} at {f['company']} (was due {f.get('followup_date') or 'today'})" for f in followups]
+        parts.append("")
+    if reach_out:
+        parts.append("REACH OUT")
+        parts += [f"- {c['name']}{' at ' + c['company'] if c.get('company') else ''}: {c.get('next_step') or 'follow up'}" for c in reach_out]
         parts.append("")
     if closing:
         parts.append("CLOSING SOON (you're tracking these)")

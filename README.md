@@ -93,6 +93,14 @@ an outside provider are opt-in and say so). There is no account and no login.
   inbox that turns a pasted recruiter email (or `manage.py check_inbox`, read-only IMAP) into a suggested pipeline move you confirm.
 - **Progress**: this week against last: applications, response rate, interviews, practice scores and composure.
 
+**Applying and closing**
+- **Tailored resume** for any job (job dialog → Tailored resume): your own resume, reordered and selected for that
+  posting, never reworded. Print → Save as PDF, or plain text for application forms.
+- **Contacts** (Pipeline page): recruiters, referrers and hiring managers per company, with a next step and date.
+- **Offers** (Pipeline page): compare offers on the whole package in TT$ a month (US$ converted, bonus and signing bonus
+  spread over year one, leave, remote days, commute), flag anything under your floor, and practise negotiating the real number.
+- **Job alerts** by Telegram or email: new good-fit roles, follow-ups due, contacts to reach out to, roles closing soon.
+
 **Helps you work the pipeline**
 - Ledger with filters, saved views, multi-select **compare** (up to 4 roles) and bulk actions, keyboard shortcuts,
   command palette (⌘/Ctrl-K), employer drawer, status / follow-up / notes.

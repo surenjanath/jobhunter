@@ -91,7 +91,7 @@ async function renderDrills(){
 async function renderReal(){
   const el=$('#csReal'); el.innerHTML='<p class="co">Loading…</p>';
   let d, ib; try{ [d,ib]=await Promise.all([jfetch('/api/coach/interviews/'), jfetch('/api/coach/inbox/')]); }catch(e){ el.innerHTML=`<div class="banner w">${esc(e.message)}</div>`; return; }
-  const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
+  const tomorrow=localISOIn(1);
   el.innerHTML=`
     ${ib.suggestions.length?`<div class="block"><h3>From your inbox <span class="quiet">confirm each one</span></h3>
       ${ib.suggestions.map(s=>`<div class="cs-sug"><div><b>${esc(s.kind)}</b> · ${esc(s.subject||'(no subject)')} <span class="co">${esc(s.sender||'')}</span>

@@ -98,3 +98,47 @@ class InboxSuggestion(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class Contact(models.Model):
+    """Someone at a company you're pursuing: recruiter, referrer, hiring manager. Referrals are the biggest lever in
+    a job search; a next step with a date keeps them from going cold (due ones are included in job alerts)."""
+    user = models.ForeignKey(related_name="contacts", **_USER)
+    name = models.CharField(max_length=200)
+    company = models.CharField(max_length=200, blank=True, default="")
+    role = models.CharField(max_length=200, blank=True, default="")            # e.g. Recruiter, Senior Engineer
+    kind = models.CharField(max_length=20, default="other")                     # recruiter | referrer | hiring | peer | other
+    email = models.CharField(max_length=254, blank=True, default="")
+    link = models.CharField(max_length=400, blank=True, default="")             # LinkedIn or similar
+    job_id = models.CharField(max_length=255, blank=True, default="")
+    how_met = models.CharField(max_length=300, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    next_step = models.CharField(max_length=300, blank=True, default="")
+    next_date = models.DateField(null=True, blank=True)
+    last_contacted = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["company", "name"]
+
+
+class Offer(models.Model):
+    """A job offer, for side-by-side comparison (jobhunt/src/coach.compare_offers)."""
+    user = models.ForeignKey(related_name="offers", **_USER)
+    company = models.CharField(max_length=200)
+    title = models.CharField(max_length=200, blank=True, default="")
+    job_id = models.CharField(max_length=255, blank=True, default="")
+    base_monthly = models.FloatField(default=0)
+    currency = models.CharField(max_length=4, default="TT$")                    # TT$ | US$
+    bonus_pct = models.FloatField(default=0)
+    signing = models.FloatField(default=0)
+    leave_days = models.IntegerField(default=0)
+    remote_days = models.IntegerField(default=0)                                # per week
+    commute_minutes = models.IntegerField(default=0)                            # one way
+    deadline = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, default="considering")            # considering | negotiating | accepted | declined
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

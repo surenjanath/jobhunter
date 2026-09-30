@@ -51,13 +51,13 @@ function trackHtml(j){
 }
 function wireTrack(j){
   const save=$('#trSave'); if(!save) return;
-  document.querySelectorAll('[data-fu]').forEach(b=>b.onclick=()=>{ const d=new Date(); d.setDate(d.getDate()+ +b.dataset.fu); $('#trFollow').value=d.toISOString().slice(0,10); });
+  document.querySelectorAll('[data-fu]').forEach(b=>b.onclick=()=>{ $('#trFollow').value=localISOIn(+b.dataset.fu); });
   const statusEl=$('#trStatus'), reasonRow=$('#trReasonRow'), reasonSel=$('#trReason'), reasonOther=$('#trReasonOther');
   const syncReason=()=>{ reasonRow.hidden=statusEl.value!=='Passed on it'; reasonOther.hidden=reasonSel.value!=='Other'; };
   statusEl.onchange=syncReason; reasonSel.onchange=syncReason;
   save.onclick=async()=>{
     const body={status:statusEl.value,followup_date:$('#trFollow').value,notes:$('#trNotes').value};
-    if(body.status==='Applied' && !j.applied_date) body.applied_date=new Date().toISOString().slice(0,10);
+    if(body.status==='Applied' && !j.applied_date) body.applied_date=localISO();
     if(body.status==='Passed on it') body.dismiss_reason=reasonSel.value==='Other'?(reasonOther.value.trim()||'Other'):reasonSel.value;
     try{ await jfetch(`/api/jobs/${encodeURIComponent(j.job_id)}/status/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const row=JOBS.find(x=>x.job_id===j.job_id); if(row) Object.assign(row,{app_status:body.status,followup_date:body.followup_date,notes:body.notes,dismiss_reason:body.dismiss_reason??row.dismiss_reason}); Object.assign(j,{app_status:body.status,followup_date:body.followup_date,notes:body.notes,dismiss_reason:body.dismiss_reason??j.dismiss_reason});

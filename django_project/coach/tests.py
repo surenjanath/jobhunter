@@ -185,3 +185,49 @@ class CoachAPITests(ScannerDBTestCase):
         self.assertEqual(w["this"]["stories"], 1)
         self.assertEqual(w["next_interview"]["job_id"], "c1")
         self.assertTrue(w["reads"])
+
+
+class ContactsOffersTests(ScannerDBTestCase):
+    def setUp(self):
+        self.c = APIClient()
+        from src import profile_store
+        profile_store.import_resume(RESUME.encode(), "jane.md", embed=False)
+        self.make_job("n1", title="Python Developer", company="Acme Insurance", description=DESC, region="North", location="Port of Spain, Trinidad")
+
+    def test_contacts_crud_due_and_private(self):
+        self.assertEqual(self.c.post("/api/coach/contacts/", {"company": "Acme"}, format="json").status_code, 400)
+        today = timezone.localdate()
+        a = self.c.post("/api/coach/contacts/", {"name": "Jane Recruiter", "company": "Acme Insurance", "kind": "recruiter",
+                                                 "next_step": "Ask about the timeline", "next_date": today.isoformat()}, format="json").json()
+        self.c.post("/api/coach/contacts/", {"name": "Later Person", "next_date": (today + timedelta(days=5)).isoformat()}, format="json")
+        d = self.c.get("/api/coach/contacts/").json()
+        self.assertEqual([x["name"] for x in d["due"]], ["Jane Recruiter"])
+        u = self.c.put(f"/api/coach/contacts/{a['id']}/", {"last_contacted": today.isoformat(), "next_date": (today + timedelta(days=7)).isoformat()}, format="json").json()
+        self.assertFalse(u["due"])
+        other = APIClient()
+        other.force_authenticate(User.objects.create_user(username="z@example.com", password="correct-horse-battery-9"))
+        self.assertEqual(other.get("/api/coach/contacts/").json()["contacts"], [])
+        self.assertEqual(other.delete(f"/api/coach/contacts/{a['id']}/").status_code, 404)
+
+    def test_offers_compare_in_ttd_with_floor(self):
+        self.c.post("/api/coach/offers/", {"company": "A", "base_monthly": 3000, "currency": "US$", "bonus_pct": 10, "commute_minutes": 45}, format="json")
+        self.c.post("/api/coach/offers/", {"company": "B", "base_monthly": 18000, "currency": "TT$", "signing": 12000, "remote_days": 5, "leave_days": 25}, format="json")
+        self.assertEqual(self.c.post("/api/coach/offers/", {"base_monthly": 1}, format="json").status_code, 400)
+        d = self.c.get("/api/coach/offers/").json()
+        self.assertEqual([o["company"] for o in d["offers"]], ["A", "B"])      # A is worth more in year one
+        self.assertEqual(d["offers"][1]["value"]["total_ttd"], 19000)          # 18,000 + 12,000 signing / 12
+        self.assertTrue(any("more days of leave" in n for n in d["notes"]))
+
+    def test_negotiation_practice_uses_the_real_offer(self):
+        r = self.c.post("/api/jobs/n1/interview/questions/", {"kind": "negotiation", "offer_amount": 21500, "offer_currency": "TT$"}, format="json").json()
+        self.assertEqual(r["offer"]["amount"], 21500)
+        self.assertIn("21,500 TT dollars a month", r["questions"][0]["q"])
+
+    def test_due_contacts_are_in_the_alert(self):
+        from unittest import mock
+        from core import alerts_service
+        self.c.post("/api/coach/contacts/", {"name": "Jane Recruiter", "company": "Acme", "next_step": "Send portfolio",
+                                             "next_date": timezone.localdate().isoformat()}, format="json")
+        out = alerts_service.run(None, dry_run=True)
+        self.assertIn("REACH OUT", out["message"]["text"])
+        self.assertIn("Jane Recruiter at Acme: Send portfolio", out["message"]["text"])

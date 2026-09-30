@@ -147,6 +147,13 @@ def _typed_questions(request, d: dict, kind: str, n: int, persona: str) -> dict:
         local = bool(d.get("region")) or "trinidad" in (d.get("location") or "").lower()
         bm = _sal.benchmark(d)
         offer = coach.offer_for(bm, (bm or {}).get("peers") or _sal.context_for_missing(d).get("peers"), local)
+        try:   # practising a real offer (Pipeline → Offers → "practise negotiating"): use its numbers
+            amt = int(float(request.data.get("offer_amount") or 0))
+        except (TypeError, ValueError):
+            amt = 0
+        if amt > 0:
+            cur = "US$" if str(request.data.get("offer_currency") or "").upper().startswith("US") else "TT$"
+            offer = {"amount": amt, "unit": f"{cur} a month", "basis": "your real offer"}
     qs = coach.typed_questions(kind, d, skills, offer)
     provider = "rules"
     if kind == "technical" and _want_ai(request):

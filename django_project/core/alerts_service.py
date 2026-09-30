@@ -37,7 +37,11 @@ def gather(user=None, days: int = 2, min_fit: int | None = None, limit: int = 10
     closing = [{"title": j.title, "company": j.company, "expires_at": j.expires_at} for j in jobs
                if j.job_id in pipe and (pipe[j.job_id].starred or pipe[j.job_id].status not in ("New",) + CLOSED)
                and j.expires_at and today <= j.expires_at <= soon]
-    return {"picks": picks, "followups": followups, "closing": closing}
+    from coach.models import Contact
+    cq = Contact.objects.filter(user=user) if user is not None else Contact.objects.filter(user__isnull=True)
+    reach_out = [{"name": c.name, "company": c.company, "next_step": c.next_step}
+                 for c in cq.filter(next_date__isnull=False, next_date__lte=date.today())]
+    return {"picks": picks, "followups": followups, "closing": closing, "reach_out": reach_out}
 
 
 def run(user=None, dry_run: bool = False) -> dict:
@@ -45,7 +49,7 @@ def run(user=None, dry_run: bool = False) -> dict:
     from .models import AlertSent
     g = gather(user)
     site = f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/" if os.environ.get("RENDER_EXTERNAL_HOSTNAME") else os.environ.get("JOBHUNTER_SITE_URL", "")
-    msg = alerts.compose(g["picks"], g["followups"], g["closing"], site)
+    msg = alerts.compose(g["picks"], g["followups"], g["closing"], site, g["reach_out"])
     if not msg:
         return {"sent": False, "reason": "nothing new", "counts": {k: len(v) for k, v in g.items()}}
     if dry_run:

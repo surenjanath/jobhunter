@@ -7,7 +7,7 @@ async function paintPipeline(force){
   const body=$('#pipelineBody'); if(!body) return;
   if(!force && document.activeElement && document.activeElement.closest && document.activeElement.closest('#pipelineBody')) return;
   const tracked=JOBS.filter(j=>(j.app_status||'New')!=='New' || j.starred);
-  const today=new Date().toISOString().slice(0,10);
+  const today=localISO();
   body.innerHTML=`<div>${tracked.map(j=>{
     const due=j.followup_date && j.followup_date<=today && !/Rejected|Passed|Offer/.test(j.app_status||'');
     return `<div class="pipe-row ${due?'due':''}">

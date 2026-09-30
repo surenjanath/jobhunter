@@ -518,3 +518,13 @@ mark.hl.have{background:rgba(127,127,120,.18)}
   .cv-skills .m{font-weight:normal}
 }
 .al-preview{white-space:pre-wrap;font-size:12px;border:1px solid var(--rule);padding:10px;max-height:300px;overflow:auto;color:var(--ink)}
+/* Pipeline: contacts and offers */
+.net-table td{vertical-align:top}
+.net-due td{background:rgba(180,83,60,.06)}
+.net-add{margin-top:10px}
+.net-add summary{cursor:pointer;color:var(--mute)}
+.net-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:8px}
+.net-form input,.net-form select,.net-form textarea{border:1px solid var(--rule);background:var(--canvas);color:var(--ink);padding:6px}
+.net-form textarea{grid-column:1/-1}
+.net-form button{justify-self:start;border:1px solid var(--ink);padding:4px 12px}
+@media(max-width:700px){.net-table{display:block;overflow-x:auto}}

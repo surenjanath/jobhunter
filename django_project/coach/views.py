@@ -409,3 +409,103 @@ def weekly(request):
     nxt = _mine(request, RealInterview).filter(scheduled_on__gte=timezone.localdate(), logged=False).first()
     rep["next_interview"] = _ri_out(nxt) if nxt else None
     return Response(rep)
+
+
+# ---------------------------------------------------------------------------
+# contacts and offers
+# ---------------------------------------------------------------------------
+
+from .models import Contact, Offer  # noqa: E402
+
+_CONTACT_FIELDS = {"name": 200, "company": 200, "role": 200, "kind": 20, "email": 254, "link": 400, "job_id": 255,
+                   "how_met": 300, "notes": 5000, "next_step": 300}
+_CONTACT_DATES = ("next_date", "last_contacted")
+
+
+def _contact_out(c: Contact) -> dict:
+    return {"id": c.id, **{f: getattr(c, f) for f in _CONTACT_FIELDS}, "next_date": c.next_date, "last_contacted": c.last_contacted,
+            "due": bool(c.next_date and c.next_date <= timezone.localdate())}
+
+
+def _apply(obj, data: dict, text_fields: dict, date_fields=(), num_fields=()):
+    for f, n in text_fields.items():
+        if f in data:
+            setattr(obj, f, str(data.get(f) or "").strip()[:n])
+    for f in date_fields:
+        if f in data:
+            setattr(obj, f, _date(data.get(f)))
+    for f, kind in num_fields:
+        if f in data:
+            try:
+                setattr(obj, f, kind(data.get(f) or 0))
+            except (TypeError, ValueError):
+                pass
+
+
+@api_view(["GET", "POST"])
+def contacts(request):
+    if request.method == "POST":
+        if not str(request.data.get("name") or "").strip():
+            return Response({"error": "a name is required"}, status=400)
+        c = Contact(user=_owner(request))
+        _apply(c, request.data, _CONTACT_FIELDS, _CONTACT_DATES)
+        c.save()
+        return Response(_contact_out(c), status=201)
+    rows = [_contact_out(c) for c in _mine(request, Contact)]
+    return Response({"contacts": rows, "due": [r for r in rows if r["due"]]})
+
+
+@api_view(["PUT", "DELETE"])
+def contact(request, cid):
+    c = _mine(request, Contact).filter(id=cid).first()
+    if not c:
+        return Response({"error": "not found"}, status=404)
+    if request.method == "DELETE":
+        c.delete()
+        return Response({"ok": True})
+    _apply(c, request.data, _CONTACT_FIELDS, _CONTACT_DATES)
+    c.save()
+    return Response(_contact_out(c))
+
+
+_OFFER_TEXT = {"company": 200, "title": 200, "job_id": 255, "currency": 4, "status": 20, "notes": 5000}
+_OFFER_NUM = (("base_monthly", float), ("bonus_pct", float), ("signing", float), ("leave_days", int), ("remote_days", int), ("commute_minutes", int))
+
+
+def _offer_dict(o: Offer) -> dict:
+    return {"id": o.id, **{f: getattr(o, f) for f in _OFFER_TEXT}, **{f: getattr(o, f) for f, _ in _OFFER_NUM}, "deadline": o.deadline}
+
+
+def _fx_and_floor(request) -> tuple[float, float]:
+    from src import profile_store, salary
+    prefs = profile_store.get_prefs()   # the account's own preferences during a signed-in request
+    fx = float(prefs.get("fx_ttd_per_usd") or salary.DEFAULT_FX)
+    return fx, float(prefs.get("min_salary_monthly_ttd") or (prefs.get("min_salary_monthly_usd") or 0) * fx)
+
+
+@api_view(["GET", "POST"])
+def offers(request):
+    if request.method == "POST":
+        if not str(request.data.get("company") or "").strip():
+            return Response({"error": "the company is required"}, status=400)
+        o = Offer(user=_owner(request))
+        _apply(o, request.data, _OFFER_TEXT, ("deadline",), _OFFER_NUM)
+        if o.currency not in ("TT$", "US$"):
+            o.currency = "TT$"
+        o.save()
+        return Response(_offer_dict(o), status=201)
+    fx, floor = _fx_and_floor(request)
+    return Response(_coach().compare_offers([_offer_dict(o) for o in _mine(request, Offer)], fx, floor))
+
+
+@api_view(["PUT", "DELETE"])
+def offer(request, oid):
+    o = _mine(request, Offer).filter(id=oid).first()
+    if not o:
+        return Response({"error": "not found"}, status=404)
+    if request.method == "DELETE":
+        o.delete()
+        return Response({"ok": True})
+    _apply(o, request.data, _OFFER_TEXT, ("deadline",), _OFFER_NUM)
+    o.save()
+    return Response(_offer_dict(o))

@@ -225,7 +225,9 @@ async function ivBegin(jobId, n, opts){
   IV.persona=opts.persona||'neutral'; IV.feedbackEach=!!opts.each; IV.useAi=!!opts.ai; IV.followUps=opts.follow!==false; IV.i=0; IV.results=[]; IV.pending=null;
   IV.kind=opts.kind||'behavioural'; IV.realistic=!!opts.realistic; IV.offer=null; IV.replay={}; IV.clips=[]; IV.drillIds=opts.drillIds||null;
   if(opts.questions){ IV.questions=opts.questions; }   // drills: the questions are given
-  else try{ const r=await aiPost(`/api/jobs/${encodeURIComponent(jobId)}/interview/questions/`,{n:Math.min(n,12),persona:IV.persona,ai:IV.useAi,kind:IV.kind});
+  else try{ const qp=new URLSearchParams(location.search);
+       const r=await aiPost(`/api/jobs/${encodeURIComponent(jobId)}/interview/questions/`,{n:Math.min(n,12),persona:IV.persona,ai:IV.useAi,kind:IV.kind,
+         offer_amount:IV.kind==='negotiation'?qp.get('offer')||'':'', offer_currency:qp.get('currency')||''});
        IV.questions=(r.questions||[]).slice(0,n); IV.qProvider=r.provider; IV.offer=r.offer||null; if(r.note) toast(r.note); }
   catch(e){ el.innerHTML=`<div class="banner w">${esc(e.message)}</div>`; return; }
   if(!IV.questions.length){ el.innerHTML='<div class="banner w">No questions could be built for this role.</div>'; return; }

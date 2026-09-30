@@ -27,6 +27,10 @@ async function jfetch(url, opts){
   if(!r.ok) throw new Error(d.error||d.detail||`HTTP ${r.status} from ${url}`);
   return d;
 }
+// "today" as the user's own calendar date (YYYY-MM-DD). toISOString() is UTC: in Trinidad (UTC-4) it is already
+// tomorrow from 8pm, which made follow-ups, applied dates and "due today" a day off in the evening.
+const localISO=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const localISOIn=days=>{ const d=new Date(); d.setDate(d.getDate()+days); return localISO(d); };
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tierClass=n=> n>=65?'t1':n>=50?'t2':'t3';
 const GOOD=/good\)/i, BAD=/clearance|citizens only|permanent residency|10\+|PhD|no sponsorship|Non-engineering/i;
@@ -155,7 +159,7 @@ async function refreshPage(){
 function exportCsv(rows){
   const cols=["fit_score","tier","title","company","region","location","category","salary","source","posted_at","expires_at","app_status","url","why","flags"];
   const csv=[cols.join(",")].concat(rows.map(j=>cols.map(k=>`"${String(j[k]||'').replace(/"/g,'""')}"`).join(","))).join("\n");
-  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download=`jobhunt_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download=`jobhunt_${localISO()}.csv`; a.click();
 }
 
 // header + dock controls that exist on every page
