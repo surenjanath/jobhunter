@@ -1,3 +1,4 @@
+import re
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -129,3 +130,33 @@ def site_view(request):
         site.invalidate()
     return Response({**site.get(), "can_edit": site.can_edit(user), "signed_in": user.is_authenticated,
                      "is_admin": bool(user.is_authenticated and user.is_staff)})
+
+
+def _tailored(job_id):
+    from ai.views import _job, as_dict
+    job = _job(job_id)
+    if not job:
+        return None, None
+    from src import tailored_resume
+    return tailored_resume, tailored_resume.build(as_dict(job))
+
+
+def tailored_resume_page(request, job_id):
+    """Your resume arranged for one posting, laid out for printing (browser Print → Save as PDF)."""
+    tr, r = _tailored(job_id)
+    if r is None:
+        from django.http import Http404
+        raise Http404("no such job")
+    return render(request, "pages/resume.html", {"r": r, "job_id": job_id, "page_title": "Tailored resume"})
+
+
+def tailored_resume_download(request, job_id, fmt):
+    from django.http import HttpResponse
+    tr, r = _tailored(job_id)
+    if r is None or r.get("error"):
+        return JsonResponse({"error": (r or {}).get("error") or "no such job"}, status=404 if r is None else 409)
+    body = tr.to_markdown(r) if fmt == "md" else tr.to_text(r)
+    slug = re.sub(r"[^a-z0-9]+", "-", f"{r['name']} {r['for_job']['company']}".lower()).strip("-")[:60] or "resume"
+    resp = HttpResponse(body, content_type="text/markdown; charset=utf-8" if fmt == "md" else "text/plain; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{slug}-resume.{fmt}"'
+    return resp

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ r.name|default:"Resume" }} · {{ r.for_job.company }}{% endblock %}
+{% block body %}
+{% if r.error %}
+<main class="cv"><p>{{ r.error }}. <a href="/profile/">Go to Profile</a></p></main>
+{% else %}
+<div class="cv-bar">
+  <span>Tailored for <b>{{ r.for_job.title }}</b>{% if r.for_job.company %} at {{ r.for_job.company }}{% endif %}</span>
+  <span class="cv-actions">
+    <button type="button" class="go" onclick="window.print()">Save as PDF / print</button>
+    <a href="/api/jobs/{{ job_id|urlencode }}/resume.txt">Plain text (for ATS forms)</a>
+    <a href="/api/jobs/{{ job_id|urlencode }}/resume.md">Markdown</a>
+  </span>
+  <p class="cv-note">{{ r.notes.how }}{% if r.notes.bullets_left_out %} {{ r.notes.bullets_left_out }} less relevant bullet{{ r.notes.bullets_left_out|pluralize }} left out.{% endif %}
+    {% if r.notes.missing_required %}The posting also asks for <b>{{ r.notes.missing_required|join:", " }}</b>, which your resume doesn't mention: add them only if you've really used them.{% endif %}</p>
+</div>
+<main class="cv">
+  <header>
+    <h1>{{ r.name }}</h1>
+    {% if r.headline %}<div class="cv-headline">{{ r.headline }}</div>{% endif %}
+    <div class="cv-contact">{{ r.contact|join:"  ·  " }}</div>
+  </header>
+  {% if r.summary %}<section><h2>Summary</h2><p>{{ r.summary }}</p></section>{% endif %}
+  {% if r.skills %}<section><h2>Skills</h2><p class="cv-skills">{% for s in r.skills %}<span{% if s in r.skills_matched %} class="m"{% endif %}>{{ s }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}</p></section>{% endif %}
+  {% if r.roles %}<section><h2>Experience</h2>
+    {% for role in r.roles %}<div class="cv-role">
+      <div class="cv-rolehead"><div><b>{{ role.title }}</b>{% if role.company %}, {{ role.company }}{% endif %}</div><span>{{ role.dates }}</span></div>
+      <ul>{% for b in role.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+    </div>{% endfor %}
+  </section>{% endif %}
+  {% if r.projects %}<section><h2>Projects</h2><ul>{% for p in r.projects %}<li><b>{{ p.name }}</b>: {{ p.text }}</li>{% endfor %}</ul></section>{% endif %}
+  {% if r.education %}<section><h2>Education</h2><ul>{% for e in r.education %}<li>{{ e }}</li>{% endfor %}</ul></section>{% endif %}
+  {% if r.certifications %}<section><h2>Certifications</h2><ul>{% for c in r.certifications %}<li>{{ c }}</li>{% endfor %}</ul></section>{% endif %}
+</main>
+{% endif %}
+{% endblock %}

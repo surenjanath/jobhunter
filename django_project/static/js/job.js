@@ -19,7 +19,7 @@ function setTab(t){ CURRENT_TAB=t; syncTabs(); if(CURRENT_JOB) renderJobTab(CURR
 document.querySelectorAll('#jobTabs .tab, #jobSubTabsReq .tab, #jobSubTabsAi .tab').forEach(el=>el.onclick=()=>setTab(el.dataset.tab));
 async function openJob(jobId){
   const j=JOBS.find(x=>x.job_id===jobId); if(!j) return;
-  $('#jobTitle').textContent=j.title; $('#jobSub').textContent=`${j.company} · ${j.location||'—'} · ${j.source}`; $('#jobApply').href=j.url||'#'; $('#jobNote').textContent=`Fit ${j.fit_score} · ${j.tier} · ${j.posted_at||'—'}`; $('#jobBody').innerHTML='<span class="co">Analyzing…</span>'; jobDlg.showModal(); CURRENT_JOB=j; CURRENT_TAB='match'; syncTabs();
+  $('#jobTitle').textContent=j.title; $('#jobSub').textContent=`${j.company} · ${j.location||'—'} · ${j.source}`; $('#jobApply').href=j.url||'#'; $('#jobResume').href='/resume/'+encodeURIComponent(j.job_id)+'/'; $('#jobNote').textContent=`Fit ${j.fit_score} · ${j.tier} · ${j.posted_at||'—'}`; $('#jobBody').innerHTML='<span class="co">Analyzing…</span>'; jobDlg.showModal(); CURRENT_JOB=j; CURRENT_TAB='match'; syncTabs();
   try{const d=await jfetch(`/api/jobs/${encodeURIComponent(jobId)}/`); if(d.error) throw new Error(d.error); CURRENT_JOB={...j, ...d.job, details:d.details, likelihood:d.likelihood}; Object.assign(j, CURRENT_JOB); renderJobTab(CURRENT_JOB);}catch(e){$('#jobBody').innerHTML=`<div class="banner w">${esc(e.message)}</div><pre class="co">${esc(j.description||'').slice(0,3000)}</pre>`;}
 }
 function renderJobTab(j){

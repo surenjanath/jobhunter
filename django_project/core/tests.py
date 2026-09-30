@@ -151,3 +151,51 @@ class SiteAccessTests(TestCase):
     def test_login_page_only_redirects_within_the_site(self):
         html = self.client.get("/login/?next=//evil.example.com/").content.decode()
         self.assertIn("const next='/'", html)
+
+
+from jobs.testutil import ScannerDBTestCase  # noqa: E402
+
+
+class TailoredResumeTests(ScannerDBTestCase):
+    def setUp(self):
+        from candidate.tests import RESUME
+        from src import profile_store
+        self.resume = RESUME
+        profile_store.import_resume(RESUME.encode(), "jane.md", embed=False)
+        self.make_job("tr1", title="Senior Python Developer", company="Initech",
+                      description="Requirements\n- 3+ years Python and Django\n- Docker and AWS\n- n8n automation")
+
+    def test_only_reorders_and_selects_never_invents(self):
+        from src import profile_store, tailored_resume
+        from ai.views import _job, as_dict
+        r = tailored_resume.build(as_dict(_job("tr1")))
+        prof = profile_store.active_profile()
+        originals = {b for role in prof["roles"] for b in role["bullets"]}
+        self.assertTrue(r["roles"] and r["roles"][0]["bullets"])
+        for role in r["roles"]:
+            for b in role["bullets"]:
+                self.assertIn(b, originals)                       # word for word from the resume
+        self.assertEqual(r["summary"], prof.get("summary") or "")
+        self.assertLessEqual(set(r["skills"]), set(prof["skills"]))   # no skill you don't have
+        self.assertEqual(r["skills"][: len(r["skills_matched"])], r["skills_matched"])   # posting's skills first
+        self.assertIn("Django", r["skills_matched"])
+
+    def test_page_and_downloads(self):
+        page = self.client.get("/resume/tr1/")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Tailored for")
+        txt = self.client.get("/api/jobs/tr1/resume.txt")
+        self.assertEqual(txt.status_code, 200)
+        self.assertIn("attachment;", txt["Content-Disposition"])
+        body = txt.content.decode()
+        self.assertIn("EXPERIENCE", body)
+        self.assertNotIn("**", body)
+        md = self.client.get("/api/jobs/tr1/resume.md").content.decode()
+        self.assertIn("## Experience", md)
+        self.assertEqual(self.client.get("/resume/nope/").status_code, 404)
+
+    def test_no_resume_says_so(self):
+        from src import profile_store, tailored_resume
+        from unittest import mock
+        with mock.patch("src.matching.current_context", return_value=None):
+            self.assertIn("error", tailored_resume.build({"title": "x"}))
