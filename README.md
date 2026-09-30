@@ -146,6 +146,9 @@ skill area and what to learn next. Light and dark themes.
 Requires Python 3.12+. For PDF resumes install poppler (`brew install poppler` / `apt install poppler-utils`); DOCX,
 Markdown and text work without it.
 
+Already set up? **`./run.sh`** starts it with your normal `python3` and opens the browser (`./run.sh 9000` for
+another port). It tells you whether the Kokoro voice and Ollama are available.
+
 ```bash
 git clone https://github.com/surenjanath/jobhunter.git
 cd jobhunter
