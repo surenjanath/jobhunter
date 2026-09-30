@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections import Counter
 from datetime import date, datetime
 from typing import Any
 
@@ -291,7 +292,12 @@ def title_alignment(title: str, ctx: dict) -> tuple[float, str]:
         s = sim * w
         if s > best:
             best, why = s, target
-    skills_in_title = [s for s in tax.find_skills(title) if s in ctx["skills"]]
+    # a skill in the title only counts as a title match when it's in one of YOUR main skill areas (3+ skills on your
+    # resume): "Python Developer" for a developer, "Accountant" for an accountant — but a developer who happens to list
+    # Supply Chain isn't a title match for "Logistics Officer"
+    cats = Counter(v.get("category") for v in ctx["skills"].values())
+    focus = {c for c, n in cats.items() if n >= 3 and c not in ("Domains", "Languages (spoken)")}
+    skills_in_title = [s for s in tax.find_skills(title) if s in ctx["skills"] and ctx["skills"][s].get("category") in focus]
     if skills_in_title:
         s = 0.7 + min(0.25, 0.08 * len(skills_in_title))
         if s > best:
@@ -590,6 +596,24 @@ def evaluate(job: dict, ctx: dict, *, deep: bool = False) -> dict:
         verdict = "Low"
 
     fit_cap = 25 if any(re.search(r"citizen|clearance|permanent residen|phd", b, re.I) for b in blockers) else 100
+    # a skill named in the job TITLE is the core of the role ("Senior Go Engineer", "Salesforce Admin"): if you have
+    # NONE of the title's skills, matching the rest of the posting doesn't make it a fit. Titles that list a stack
+    # ("Python/Django + VueJS") are fine when you have part of it, and domain words ("…, Internal Audit") don't count.
+    title_items = [i for i in sk["items"] if i["name"] in set(tax.find_skills(job.get("title") or "")) - tax.SOFT]
+    craft = [i for i in title_items if i.get("category") not in ("Domains", "Insurance & Finance", "Languages (spoken)")]
+    if craft and not any(i["status"] == "have" for i in title_items):
+        for i in craft:
+            if i["status"] == "missing":
+                fit_cap = min(fit_cap, 45)
+                gaps[:] = [g for g in gaps if not g.startswith(f"No {i['name']} on your resume")]   # said once, more precisely
+                gaps.insert(0, f"The title names {i['name']}, which isn't on your resume")
+            elif i["status"] == "related":
+                fit_cap = min(fit_cap, 60)
+                gaps.insert(0, f"The title names {i['name']}; you have related {i.get('via') or 'experience'}")
+    elif craft:
+        others = [i["name"] for i in craft if i["status"] == "missing"]
+        if others:
+            gaps.append(f"The title also names {', '.join(others[:3])}, not on your resume")
     fit = min(fit, fit_cap)
 
     advice = _advice(verdict, local, blockers, sk, R, Y, a)

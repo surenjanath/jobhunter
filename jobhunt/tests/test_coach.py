@@ -135,3 +135,22 @@ def run(check, cfg):
     check("weekly: low response rate and no practice before real interviews are called out",
           wr["response_rate"] == 0 and any("response" in r for r in wr["reads"]) and any("no mock practice" in r for r in wr["reads"]), wr["reads"])
     check("weekly: deltas", wr["deltas"]["applied"] == 6)
+
+    # ---- matching precision ----------------------------------------------------------------------------------------
+    from src import matching, skills_taxonomy as tax
+    check("taxonomy: 'GIT' (Graduate In Training) isn't the Git tool", "Git" not in tax.find_skills("Field Service Engineer Graduate In Training (GIT)"))
+    check("taxonomy: Git / git still found", tax.find_skills("We use Git and git-flow")["Git"] == 2)
+    ctx = matching.load_context(profile={"skills": {"Python": {"category": "Languages", "years": 4}, "Django": {"category": "Web & Backend", "years": 4},
+                                                   "PostgreSQL": {"category": "Data & Databases", "years": 3}, "SQL": {"category": "Languages"},
+                                                   "Bash": {"category": "Languages"}, "Supply Chain": {"category": "Business & Operations"}},
+                                        "titles": ["Backend Engineer"], "years_experience": 5, "seniority": "senior", "roles": []},
+                                prefs={}, index=None, priors=None)
+    if ctx:
+        check("title: a main-area skill in the title is a match", matching.title_alignment("Python Developer", ctx)[0] >= 0.7)
+        check("title: a side skill (Supply Chain) doesn't make 'Logistics Officer' a title match",
+              matching.title_alignment("Logistics Officer", ctx)[0] < 0.3, matching.title_alignment("Logistics Officer", ctx))
+        go = matching.evaluate({"title": "Senior Go Backend Engineer", "company": "X", "description": "Requirements: 5 years of Go. PostgreSQL. REST APIs.",
+                                "location": "Remote", "remote": True}, ctx)
+        check("fit: the title's core skill missing (Go) caps fit at 45 and says why",
+              go["fit"] <= 45 and any("title names Go" in g for g in go["gaps"]), (go["fit"], go["gaps"][:2]))
+

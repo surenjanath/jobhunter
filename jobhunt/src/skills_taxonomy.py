@@ -102,7 +102,9 @@ _ALIAS_RE: list[tuple[str, re.Pattern]] = []
 for _canon, (_cat, _aliases) in _T.items():
     _ALIAS_RE.append((_canon, re.compile("|".join(_pattern(a) for a in dict.fromkeys(_aliases + [_canon])), re.I)))
 
-_STRICT_CASE = {"Go": r"\bGo\b(?!\s+(?:to|for|get|live|ahead))", "R": r"(?<![A-Za-z])R(?![A-Za-z'\.])(?=[,;)\s]|$)"}
+_STRICT_CASE = {"Go": r"\bGo\b(?!\s+(?:to|for|get|live|ahead))", "R": r"(?<![A-Za-z])R(?![A-Za-z'\.])(?=[,;)\s]|$)",
+                # "GIT" in capitals is an acronym (Graduate In Training); the tool is written Git / git
+                "Git": r"(?<![A-Za-z])(?:Git|git)(?![A-Za-z])"}
 
 
 # Speed: scanning ~195 regexes over every text is slow when a job is analysed many times. Each skill gets a cheap
