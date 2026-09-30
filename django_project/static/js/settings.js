@@ -80,4 +80,25 @@ async function loadSiteAccess(){
   up.onchange=()=>save('allow_signup',up);
   rq.onchange=()=>save('require_signin',rq);
 }
-Object.assign(PAGE_HOOKS,{ init:()=>{ loadSiteAccess(); return loadSettings(); }, refresh:()=>{} });
+// ---- job alerts (email / Telegram) -------------------------------------------------------------------------------------
+async function loadAlerts(){
+  const el=$('#alertsBody'); if(!el) return;
+  let d; try{ d=await jfetch('/api/alerts/'); }catch(e){ el.textContent=e.message; return; }
+  const on=Object.entries(d.channels).filter(([,v])=>v).map(([k])=>k);
+  const c=d.counts||{};
+  el.innerHTML=`<p>${on.length?`Sending to: <b>${on.map(esc).join(' and ')}</b>.`:'No channel set up yet. Alerts can go to email or Telegram: set the environment variables in <code>docs/ALERTS.md</code>, then restart.'}</p>
+    <p>Next alert would include: ${c.picks||0} new role${c.picks===1?'':'s'}, ${c.followups||0} follow-up${c.followups===1?'':'s'} due, ${c.closing||0} closing soon.
+      ${d.preview?'<button type="button" class="text" id="alPrev">Preview</button>':''}</p>
+    <pre id="alPrevBox" class="al-preview" hidden>${esc(d.preview?d.preview.subject+'\n\n'+d.preview.text:'')}</pre>
+    ${on.length&&d.can_send?'<div class="actions"><button type="button" class="sm" id="alTest">Send a test alert</button> <button type="button" class="sm" id="alSend">Send now</button></div>':''}`;
+  const pv=$('#alPrev'); if(pv) pv.onclick=()=>{ const b=$('#alPrevBox'); b.hidden=!b.hidden; };
+  const act=async(action,btn)=>{ btn.disabled=true;
+    try{ const r=await jfetch('/api/alerts/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+      const res=r.channels||{}; const bad=Object.entries(res).filter(([,v])=>v!=='sent');
+      toast(bad.length?`Not sent: ${bad.map(([k,v])=>k+' '+v).join('; ')}`:(action==='test'?'Test alert sent':(r.sent?'Alert sent':r.reason||'Nothing new to send')), bad.length?'bad':'ok');
+      loadAlerts(); }
+    catch(e){ toast(e.message,'bad'); } btn.disabled=false; };
+  const t=$('#alTest'); if(t) t.onclick=()=>act('test',t);
+  const s=$('#alSend'); if(s) s.onclick=()=>act('send',s);
+}
+Object.assign(PAGE_HOOKS,{ init:()=>{ loadSiteAccess(); loadAlerts(); return loadSettings(); }, refresh:()=>{} });

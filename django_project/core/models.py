@@ -29,3 +29,9 @@ class SiteConfig(models.Model):
 
     def __str__(self):
         return f"signup={self.allow_signup} signin={self.require_signin}"
+
+
+class AlertSent(models.Model):
+    """A job already announced in an alert, so the next alert only has new ones."""
+    job_id = models.CharField(max_length=255, unique=True)
+    sent_at = models.DateTimeField(auto_now_add=True)

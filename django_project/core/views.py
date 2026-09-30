@@ -160,3 +160,24 @@ def tailored_resume_download(request, job_id, fmt):
     resp = HttpResponse(body, content_type="text/markdown; charset=utf-8" if fmt == "md" else "text/plain; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{slug}-resume.{fmt}"'
     return resp
+
+
+@api_view(["GET", "POST"])
+def alerts_view(request):
+    """GET: which alert channels are configured, and a preview of what the next alert would say.
+    POST {"action": "test"} sends a short test message; {"action": "send"} sends the real alert now. Admin only."""
+    from src import alerts
+    from . import alerts_service, site
+    user = request.user if request.user.is_authenticated else None
+    if request.method == "GET":
+        preview = alerts_service.run(user or alerts_service.owner_user(), dry_run=True)
+        return Response({"channels": alerts.channels(), "preview": preview.get("message"), "counts": preview.get("counts"),
+                         "can_send": site.can_edit(request.user)})
+    if not site.can_edit(request.user):
+        return Response({"error": "only an admin account can send alerts"}, status=403)
+    if not any(alerts.channels().values()):
+        return Response({"error": "no alert channel configured: see docs/ALERTS.md"}, status=400)
+    if (request.data or {}).get("action") == "test":
+        return Response({"channels": alerts.send({"subject": "JobHunter: test alert",
+                                                   "text": "Alerts are set up. You'll get new good-fit roles, follow-ups due and closing dates here.\n"})})
+    return Response(alerts_service.run(user or alerts_service.owner_user()))

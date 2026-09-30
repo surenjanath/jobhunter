@@ -199,3 +199,58 @@ class TailoredResumeTests(ScannerDBTestCase):
         from unittest import mock
         with mock.patch("src.matching.current_context", return_value=None):
             self.assertIn("error", tailored_resume.build({"title": "x"}))
+
+
+class AlertTests(ScannerDBTestCase):
+    def setUp(self):
+        from datetime import date, timedelta
+        from candidate.tests import RESUME
+        from src import profile_store
+        profile_store.import_resume(RESUME.encode(), "jane.md", embed=False)
+        today = date.today()
+        self.make_job("al1", title="Senior Python Developer", company="Initech", fit_score=80, likelihood=60,
+                      description="Python Django PostgreSQL Docker AWS", region="", location="Remote", remote=True, first_seen=today.isoformat())
+        self.make_job("al2", title="Analyst", company="Globex", fit_score=60, expires_at=(today + timedelta(days=2)).isoformat())
+        self.client.post("/api/jobs/bulk-status/", {"job_ids": ["al2"], "status": "Applied"}, content_type="application/json")
+
+    def test_compose_is_empty_when_nothing_to_say(self):
+        from src import alerts
+        self.assertIsNone(alerts.compose([], [], []))
+        m = alerts.compose([{"title": "Dev", "company": "X", "fit": 70, "verdict": "High", "where": "Remote", "url": "https://x/y"}],
+                           [{"title": "A", "company": "B", "followup_date": "2026-01-01"}], [], "https://me.onrender.com/")
+        self.assertEqual(m["subject"], "JobHunter: 1 new role, 1 follow-up due")
+        self.assertIn("FOLLOW UP TODAY", m["text"])
+        self.assertIn("https://me.onrender.com/", m["text"])
+
+    def test_nothing_is_sent_without_a_channel(self):
+        from unittest import mock
+        from core import alerts_service
+        with mock.patch.dict("os.environ", {}, clear=True), mock.patch("src.alerts.send") as send:
+            out = alerts_service.run(None)
+        send.assert_not_called()
+        self.assertIn("no alert channel", out.get("reason", ""))
+
+    def test_sends_once_per_job_and_includes_closing_tracked_roles(self):
+        from unittest import mock
+        from core import alerts_service
+        from core.models import AlertSent
+        env = {"JOBHUNTER_TELEGRAM_TOKEN": "t", "JOBHUNTER_TELEGRAM_CHAT_ID": "1"}
+        with mock.patch.dict("os.environ", env), mock.patch("src.alerts.send", return_value={"telegram": "sent"}) as send:
+            first = alerts_service.run(None)
+            msg = send.call_args[0][0]
+            second = alerts_service.run(None)
+        self.assertTrue(first["sent"])
+        self.assertIn("Initech", msg["text"])
+        self.assertIn("CLOSING SOON", msg["text"])            # the applied role that closes in 2 days
+        self.assertIn("al1", set(AlertSent.objects.values_list("job_id", flat=True)))
+        self.assertEqual(second["counts"]["picks"], 0)         # never announced twice
+
+    def test_api_needs_admin_to_send(self):
+        from django.contrib.auth.models import User
+        from rest_framework.test import APIClient
+        from unittest import mock
+        User.objects.create_user(username="boss@example.com", password="correct-horse-battery-9", is_staff=True)
+        guest = APIClient()
+        self.assertIn("channels", guest.get("/api/alerts/").json())
+        with mock.patch.dict("os.environ", {"JOBHUNTER_TELEGRAM_TOKEN": "t", "JOBHUNTER_TELEGRAM_CHAT_ID": "1"}):
+            self.assertEqual(guest.post("/api/alerts/", {"action": "test"}, format="json").status_code, 403)

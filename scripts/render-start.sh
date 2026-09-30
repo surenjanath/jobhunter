@@ -13,6 +13,7 @@ if [ -n "${JOBHUNTER_SCAN_EVERY_HOURS:-}" ]; then
   (
     while sleep "$(( JOBHUNTER_SCAN_EVERY_HOURS * 3600 ))"; do
       (cd ../jobhunt && "$PY" -m src.run --dry-run >> output/scheduled_scan.log 2>&1) || true
+      "$PY" manage.py send_alerts >> ../jobhunt/output/alerts.log 2>&1 || true   # no-op unless a channel is set up
     done
   ) &
 fi

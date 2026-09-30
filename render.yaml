@@ -28,3 +28,16 @@ services:
         value: "12"
       - key: ANTHROPIC_API_KEY          # optional: AI features (otherwise the built-in rules do the work)
         sync: false
+      # optional job alerts after each scan (docs/ALERTS.md): Telegram and/or email
+      - key: JOBHUNTER_TELEGRAM_TOKEN
+        sync: false
+      - key: JOBHUNTER_TELEGRAM_CHAT_ID
+        sync: false
+      - key: JOBHUNTER_SMTP_HOST
+        sync: false
+      - key: JOBHUNTER_SMTP_USER
+        sync: false
+      - key: JOBHUNTER_SMTP_PASSWORD
+        sync: false
+      - key: JOBHUNTER_ALERT_TO
+        sync: false

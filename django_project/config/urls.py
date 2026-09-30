@@ -19,6 +19,7 @@ urlpatterns = [
     path('health/', core_views.health, name='health'),
     path('health', core_views.health, name='health-no-slash'),
     path('api/site/', core_views.site_view, name='site'),
+    path('api/alerts/', core_views.alerts_view, name='alerts'),
     path('api/settings/', core_views.settings_view, name='settings'),
     path('api/settings', core_views.settings_view, name='settings-no-slash'),
     path('api/activity/', core_views.activity, name='activity'),

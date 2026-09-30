@@ -517,3 +517,4 @@ mark.hl.have{background:rgba(127,127,120,.18)}
   .cv-role{break-inside:avoid}
   .cv-skills .m{font-weight:normal}
 }
+.al-preview{white-space:pre-wrap;font-size:12px;border:1px solid var(--rule);padding:10px;max-height:300px;overflow:auto;color:var(--ink)}

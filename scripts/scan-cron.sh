@@ -43,3 +43,5 @@ ARGS=()
 [ "${SCAN_DIGEST:-}" = "1" ] && ARGS+=("--digest")
 python -m src.run "${ARGS[@]}"
 echo "$(date -Iseconds) scan finished"
+# job alerts (email / Telegram): only does anything when a channel is configured — see docs/ALERTS.md
+(cd ../django_project && python manage.py send_alerts) || echo "alerts: skipped (see docs/ALERTS.md)"

@@ -40,6 +40,10 @@
             <span class="co">Every page needs an account: guests see only the sign-in page. Use this for a copy on the internet.</span></label>
           <div class="co" id="siteNote"></div>
         </div>
+        <div class="block" style="margin-top:18px" id="alertsBlock">
+          <h3>Job alerts</h3>
+          <div id="alertsBody" class="co">Loading…</div>
+        </div>
         <div class="block" style="margin-top:18px">
           <h3>Sources</h3>
           <div id="sourcesGrid" style="display:flex;flex-wrap:wrap;gap:8px 14px"></div>
@@ -69,5 +73,5 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/settings.js' %}?v=3"></script>
+<script src="{% static 'js/settings.js' %}?v=4"></script>
 {% endblock %}
