@@ -158,6 +158,8 @@ def tailored_resume_download(request, job_id, fmt):
     tr, r = _tailored(job_id)
     if r is None or r.get("error"):
         return JsonResponse({"error": (r or {}).get("error") or "no such job"}, status=404 if r is None else 409)
+    if fmt == "json":
+        return JsonResponse(r)
     body = tr.to_markdown(r) if fmt == "md" else tr.to_text(r)
     slug = re.sub(r"[^a-z0-9]+", "-", f"{r['name']} {r['for_job']['company']}".lower()).strip("-")[:60] or "resume"
     resp = HttpResponse(body, content_type="text/markdown; charset=utf-8" if fmt == "md" else "text/plain; charset=utf-8")

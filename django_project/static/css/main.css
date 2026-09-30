@@ -528,3 +528,10 @@ mark.hl.have{background:rgba(127,127,120,.18)}
 .net-form textarea{grid-column:1/-1}
 .net-form button{justify-self:start;border:1px solid var(--ink);padding:4px 12px}
 @media(max-width:700px){.net-table{display:block;overflow-x:auto}}
+
+/* job dialog: Apply tab */
+.apply-steps{margin:0;padding-left:20px;display:grid;gap:14px}
+.apply-steps h4{margin:0 0 6px}
+.apply-steps .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.apply-steps button.sm{border:1px solid var(--rule);padding:3px 10px}
+.apply-steps button.go.sm{border-color:var(--ink)}

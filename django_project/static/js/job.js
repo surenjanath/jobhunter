@@ -25,6 +25,7 @@ async function openJob(jobId){
 function renderJobTab(j){
   const d=j.details, like=j.likelihood; let html='';
   if(CURRENT_TAB==='match'){ renderMatchTab(j); return; }
+  if(CURRENT_TAB==='apply'){ renderApplyTab(j); return; }
   if(['summary','rewrite','practice','outreach'].includes(CURRENT_TAB)){ renderAiTab(j); return; }
   if(CURRENT_TAB==='overview'){
     const src=(j.source||'').split(':')[0]; const isTT=isLocal(j);
@@ -179,3 +180,47 @@ async function draftLetter(jobId, btn){
   }
 }
 $('#bCopy').onclick=async()=>{await navigator.clipboard.writeText($('#letter').textContent); $('#bCopy').textContent='Copied'; setTimeout(()=>$('#bCopy').textContent='Copy',1200);};
+
+// ---- Apply tab: everything between "good match" and "applied", in order -------------------------------------------------
+async function renderApplyTab(j){
+  const body=$('#jobBody'), id=encodeURIComponent(j.job_id), like=j.likelihood||{};
+  const applied=j.app_status&&!['New','Shortlisted','Passed on it'].includes(j.app_status);
+  body.innerHTML=`<ol class="apply-steps">
+    <li><h4>Worth it?</h4>
+      <div class="banner ${like.verdict==='High'?'g':like.verdict==='Long shot'?'w':''}"><b>${esc(like.verdict||'—')}${like.likelihood!=null?` · ${like.likelihood}% odds`:''}</b> ${esc(like.advice||'')}
+        ${(like.blockers||[]).length?`<br><span class="co">Blockers: ${esc(like.blockers.join(' · '))}</span>`:''}</div></li>
+    <li><h4>Your resume, arranged for this posting</h4><div id="apResume" class="co">Checking…</div></li>
+    <li><h4>Cover letter</h4><p class="co">A first draft from your resume and this posting, to edit before sending.</p>
+      <button type="button" class="sm" id="apLetter">Draft the letter</button></li>
+    <li><h4>People at ${esc(j.company||'the company')}</h4><div id="apPeople" class="co">Checking…</div></li>
+    <li><h4>Apply</h4>
+      ${applied?`<div class="banner g"><b>${esc(j.app_status)}</b>${j.applied_date?` since ${esc(j.applied_date)}`:''}${j.followup_date?` · follow up on ${esc(j.followup_date)}`:''}</div>`
+        :`<p class="co">Apply on their site, then come back and mark it: the follow-up reminder is set for a week later, and it shows up in your alerts.</p>`}
+      <div class="actions">${j.url?`<a href="${esc(j.url)}" target="_blank" rel="noopener"><button type="button" class="go sm">Open the application</button></a>`:''}
+        ${applied?'':'<button type="button" class="sm" id="apDone">I\'ve applied</button>'}
+        <a href="/interview/?job=${id}" class="text">Practise the interview</a></div></li>
+  </ol>`;
+  $('#apLetter').onclick=()=>{ jobDlg.close(); draftLetter(j.job_id, $('#jobCoverBtn')); };
+  const done=$('#apDone');
+  if(done) done.onclick=async()=>{
+    done.disabled=true;
+    const body={status:'Applied', applied_date:localISO(), followup_date:localISOIn(7)};
+    try{ await jfetch(`/api/jobs/${id}/status/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      Object.assign(j, {app_status:'Applied', applied_date:body.applied_date, followup_date:body.followup_date});
+      const row=JOBS.find(x=>x.job_id===j.job_id); if(row) Object.assign(row, {app_status:'Applied', applied_date:body.applied_date, followup_date:body.followup_date});
+      toast(`Marked applied. Follow-up set for ${body.followup_date}.`); renderApplyTab(j); }
+    catch(e){ toast(e.message,'bad'); done.disabled=false; }
+  };
+  try{
+    const r=await jfetch(`/api/jobs/${id}/resume.json`);
+    $('#apResume').innerHTML=r.error?esc(r.error):`${r.skills_matched.length?`Leads with the ${r.skills_matched.length} skill${r.skills_matched.length>1?'s':''} they ask for: ${r.skills_matched.slice(0,8).map(esc).join(', ')}.`:''}
+      ${r.notes.missing_required.length?` <b>Not on your resume:</b> ${r.notes.missing_required.map(esc).join(', ')} (add only if you've really used them).`:''}
+      <div class="actions" style="margin-top:6px"><a href="/resume/${id}/" target="_blank" rel="noopener"><button type="button" class="sm">Open tailored resume (save as PDF)</button></a>
+        <a class="text" href="/api/jobs/${id}/resume.txt">plain text</a></div>`;
+  }catch(e){ $('#apResume').textContent=e.message; }
+  try{
+    const co=(j.company||'').toLowerCase().trim(), cs=(await jfetch('/api/coach/contacts/')).contacts.filter(c=>c.company.toLowerCase().trim()===co);
+    $('#apPeople').innerHTML=cs.length?cs.map(c=>`<div><b>${esc(c.name)}</b>${c.role?`, ${esc(c.role)}`:''}${c.next_step?` · next: ${esc(c.next_step)}`:''}</div>`).join('')
+      :`No contacts here yet. A referral, or a short note to the recruiter, is one of the surest ways to get your application read. <a href="/pipeline/#contactsBlock">Add one on the Pipeline page</a>.`;
+  }catch(e){ $('#apPeople').textContent=''; }
+}

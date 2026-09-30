@@ -265,3 +265,10 @@ class HealthProbeTests(TestCase):
             self.assertEqual(r.status_code, 200)
             self.assertTrue(r.json()["ok"])
             self.assertEqual(self.client.get("/ledger/", HTTP_HOST="10.201.3.7:10000").status_code, 400)   # everything else still checked
+
+
+class ResumeJsonTests(TailoredResumeTests):
+    def test_resume_json_for_the_apply_tab(self):
+        d = self.client.get("/api/jobs/tr1/resume.json").json()
+        self.assertIn("Django", d["skills_matched"])
+        self.assertIn("missing_required", d["notes"])
