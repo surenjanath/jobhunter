@@ -241,3 +241,20 @@ class AccountResumeIsolationTests(ScannerDBTestCase):
         from src import profile_store
         self.assertIsNone(profile_store.request_resume())    # the override never leaks past the request
         self.assertEqual(profile_store.active_profile()["_filename"], "jane.md")
+
+
+class AccountExportTests(ScannerDBTestCase):
+    def test_csv_export_uses_the_accounts_own_pipeline_not_the_shared_notes(self):
+        self.make_job("ex1", title="Analyst", company="Globex")
+        guest = APIClient()
+        guest.post("/api/jobs/bulk-status/", {"job_ids": ["ex1"], "status": "Rejected"}, format="json")
+        from jobs.models import ApplicationStatus
+        ApplicationStatus.objects.using("jobhunt").filter(pk="ex1").update(notes="guest's private note")
+        acct = APIClient(enforce_csrf_checks=False)
+        acct.post("/api/auth/register/", {"email": "exp@example.com", "password": "correct-horse-battery-9", "keep_current_resume": "false"}, format="json")
+        acct.post("/api/jobs/bulk-status/", {"job_ids": ["ex1"], "status": "Applied"}, format="json")
+        csv_a = acct.get("/api/jobs/export/").content.decode()
+        self.assertIn("Applied", csv_a)
+        self.assertNotIn("guest's private note", csv_a)
+        self.assertNotIn("Rejected", csv_a)
+        self.assertIn("guest's private note", guest.get("/api/jobs/export/").content.decode())

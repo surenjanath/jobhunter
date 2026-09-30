@@ -46,7 +46,7 @@ interviews and inbox suggestions (guests share one set, the same way guests shar
 
 ## Known gaps (documented, not silently skipped)
 
-- **CSV export** (`/api/jobs/export/`) always uses the shared scan's data, for every account.
+- ~~**CSV export** used the shared scan's status and notes~~ — fixed: it uses the account's own pipeline.
 - ~~Deeper job-dialog analysis, cover letters, AI features and Analytics reading the shared resume~~ — fixed:
   `accounts/middleware.py` installs the signed-in account's own resume for the whole request, so everything that reads
   "the resume" (interview prep, AI features, ATS, tailoring, cover letters, analytics) uses the account's own data.

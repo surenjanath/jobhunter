@@ -122,8 +122,12 @@ def job_export(request):
             "posted_at", "expires_at", "app_status", "starred", "followup_date", "notes", "url", "job_id"]
     w = csv.DictWriter(resp, fieldnames=cols, extrasaction="ignore")
     w.writeheader()
-    for job in qs[:5000]:
-        w.writerow(queries.serialize(job))
+    rows = list(qs[:5000])
+    # signed in: this account's own status/notes/fit — never the shared pipeline's (same overlay as /api/state/)
+    from accounts.context import overlay_for
+    status_map, match_map = overlay_for(request, [j.job_id for j in rows])
+    for job in rows:
+        w.writerow(queries.serialize(job, status_map.get(job.job_id), match_map.get(job.job_id)))
     return resp
 
 
