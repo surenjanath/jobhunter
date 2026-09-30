@@ -12,7 +12,9 @@ google-auth>=2.29.0     # Google Sheets auth
 anthropic>=0.40.0       # Anthropic API backend for cover letters / AI features
 flask>=3.0.0            # legacy Flask dashboard (jobhunt/dashboard.py) only
 
-# NOT installed by the line above (pulls in torch — a few hundred MB, too heavy to force on everyone for one
-# feature): the mock interview's spoken questions and results (jobhunt/src/voice.py). Install only if you want it:
-#   pip install kokoro soundfile numpy
+# NOT installed by the line above (a ~350 MB voice model — too heavy to force on everyone for one feature): the
+# Interview page's natural interviewer voice (jobhunt/src/voice.py). Install only if you want it:
+#   pip install kokoro-onnx soundfile          # ONNX Runtime, no torch; works on Python 3.14
+#   cd jobhunt && python -m src.voice --download   # the model (~325 MB) + voices (~28 MB) into output/models/
+# (or the PyTorch package: pip install kokoro soundfile numpy — needs spaCy, so Python <= 3.13 today)
 #   brew install espeak-ng   (or: apt install espeak-ng)

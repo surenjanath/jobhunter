@@ -3,11 +3,14 @@ voice.py — text-to-speech for the mock interview: the "interviewer" asks each 
 your score and top tip after you answer. Local, via Kokoro (the same engine the app-walkthrough skill uses for
 narration) — no API key, nothing leaves your machine.
 
-Optional by design, like every other AI feature here: Kokoro is not in requirements.txt (it pulls in torch, a
-few hundred MB — too heavy to force on everyone for one feature). Install it only if you want voice:
+Optional by design, like every other AI feature here. Two ways to run the same Kokoro model, tried in this order:
 
-    pip install kokoro soundfile numpy
-    brew install espeak-ng   # macOS phonemizer fallback; apt install espeak-ng on Linux
+    pip install kokoro-onnx soundfile          # ONNX Runtime: no torch, works on Python 3.14, fast on CPU
+    python -m src.voice --download             # the model (~325 MB) + voice pack (~28 MB) into output/models/
+
+    pip install kokoro soundfile numpy         # or the PyTorch package (needs spaCy: Python <= 3.13 today)
+
+    brew install espeak-ng   # pronunciation; apt install espeak-ng on Linux
 
 Without it, the interview section still works exactly the same, just as text (this was already true — see
 ai_features.interview_feedback). status() tells the UI which is the case so it can show or hide the voice controls.
@@ -28,9 +31,19 @@ CACHE_DIR = config.ROOT / "output" / "tts_cache"
 MAX_CHARS = 600           # a question or a feedback summary, never a whole cover letter — keeps synthesis fast
 _pipeline = None
 _pipeline_lock = threading.Lock()
-_VOICE_BY_LANG = {"a": ("af_heart", "am_michael"), "b": ("bf_emma", "bm_george")}
+# the natural-sounding Kokoro voices, by accent. a = American English, b = British English
+VOICE_LABELS = {
+    "af_heart": "Heart · American, warm", "af_bella": "Bella · American, bright", "af_nicole": "Nicole · American, soft",
+    "af_sarah": "Sarah · American, clear", "am_michael": "Michael · American, calm", "am_adam": "Adam · American, deep",
+    "am_puck": "Puck · American, lively", "bf_emma": "Emma · British, crisp", "bf_isabella": "Isabella · British, warm",
+    "bm_george": "George · British, measured", "bm_lewis": "Lewis · British, deep",
+}
 DEFAULT_VOICE = "af_heart"
-VOICES = frozenset(v for pair in _VOICE_BY_LANG.values() for v in pair)
+VOICES = frozenset(VOICE_LABELS)
+MODEL_DIR = config.ROOT / "output" / "models"
+ONNX_MODEL, ONNX_VOICES = MODEL_DIR / "kokoro-v1.0.onnx", MODEL_DIR / "voices-v1.0.bin"
+MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
+_onnx = None
 CACHE_MAX_FILES = 400     # every interview result is unique text: without a cap the cache grows forever
 
 
@@ -61,22 +74,77 @@ class VoiceUnavailable(RuntimeError):
     pass
 
 
-def available() -> bool:
+def _importable(name: str) -> bool:
+    import importlib.util
+    import sys
+    if name in sys.modules:
+        return sys.modules[name] is not None
     try:
-        import kokoro  # noqa: F401
-        import soundfile  # noqa: F401
-    except ImportError:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
         return False
-    return True
+
+
+def backend() -> str | None:
+    """'onnx' (kokoro-onnx + downloaded model), 'torch' (the kokoro package), or None."""
+    if not _importable("soundfile"):
+        return None
+    if _importable("kokoro_onnx") and ONNX_MODEL.exists() and ONNX_VOICES.exists():
+        return "onnx"
+    if _importable("kokoro"):
+        return "torch"
+    return None
+
+
+def available() -> bool:
+    return backend() is not None
+
+
+def download_models(progress=print) -> None:
+    """Fetch the ONNX model and voice pack (from the kokoro-onnx project's release) into output/models/."""
+    import urllib.request
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    for path in (ONNX_MODEL, ONNX_VOICES):
+        if path.exists() and path.stat().st_size > 1_000_000:
+            progress(f"already have {path.name}")
+            continue
+        tmp = path.with_suffix(path.suffix + ".part")
+        progress(f"downloading {path.name}…")
+        urllib.request.urlretrieve(MODEL_URL + path.name, tmp)
+        tmp.replace(path)
+    progress("done")
 
 
 def status() -> dict:
     """What the UI needs to decide whether to show voice controls."""
-    ok = available()
-    return {"available": ok,
-            "detail": "Kokoro installed — questions and results can be read aloud." if ok else
-                      "Not installed. pip install kokoro soundfile numpy (plus espeak-ng) for a spoken interviewer.",
-            "voices": [v for pair in _VOICE_BY_LANG.values() for v in pair] if ok else []}
+    b = backend()
+    missing_model = b is None and _importable("kokoro_onnx")
+    return {"available": b is not None, "backend": b,
+            "detail": ("Kokoro installed — questions and results are read aloud by a natural local voice." if b else
+                       "Kokoro is installed but its model isn't downloaded yet: python -m src.voice --download" if missing_model else
+                       "Not installed. pip install kokoro-onnx soundfile, then python -m src.voice --download (plus espeak-ng)."),
+            "voices": [{"id": v, "label": VOICE_LABELS[v]} for v in VOICE_LABELS] if b else [], "default": DEFAULT_VOICE}
+
+
+def _get_onnx():
+    global _onnx
+    with _pipeline_lock:
+        if _onnx is None:
+            from kokoro_onnx import Kokoro
+            _onnx = Kokoro(str(ONNX_MODEL), str(ONNX_VOICES))
+        return _onnx
+
+
+def _render(text: str, voice: str, speed: float):
+    """-> (samples, sample_rate) from whichever backend is installed."""
+    if backend() == "onnx":
+        samples, sr = _get_onnx().create(text, voice=voice, speed=speed, lang="en-gb" if voice.startswith("b") else "en-us")
+        return samples, sr
+    import numpy as np
+    chunks = [audio for _, _, audio in _get_pipeline(voice)(text, voice=voice, speed=speed)]
+    if not chunks:
+        return None, 24000
+    return (np.concatenate(chunks) if len(chunks) > 1 else chunks[0]), 24000
 
 
 def _get_pipeline(voice: str):
@@ -107,7 +175,7 @@ def synthesize(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.05) -> by
     """Text -> MP3 bytes. Cached on disk by (text, voice, speed) — the same question gets asked more than once.
     Raises VoiceUnavailable if Kokoro isn't installed; callers fall back to text-only (see ai/views.py)."""
     if not available():
-        raise VoiceUnavailable("Kokoro is not installed — pip install kokoro soundfile numpy")
+        raise VoiceUnavailable(status()["detail"])
     voice, speed = safe_voice(voice), safe_speed(speed)
     text = clean_for_speech(text)
     if not text:
@@ -118,15 +186,12 @@ def synthesize(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.05) -> by
         return path.read_bytes()
     prune_cache(CACHE_MAX_FILES - 1)
     import subprocess
-    import numpy as np
     import soundfile as sf
-    pipeline = _get_pipeline(voice)
-    chunks = [audio for _, _, audio in pipeline(text, voice=voice, speed=speed)]
-    if not chunks:
+    full, sr = _render(text, voice, speed)
+    if full is None or not len(full):
         raise VoiceUnavailable("Kokoro produced no audio for that text")
-    full = np.concatenate(chunks) if len(chunks) > 1 else chunks[0]
     wav_path = path.with_suffix(".wav")
-    sf.write(wav_path, full, 24000)
+    sf.write(wav_path, full, sr)
     try:
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav_path), "-codec:a", "libmp3lame", "-qscale:a", "4", str(path)],
                        check=True, capture_output=True, timeout=30)
@@ -144,3 +209,10 @@ def synthesized_content_type(text: str, voice: str = DEFAULT_VOICE, speed: float
     ct = "audio/mpeg" if path.exists() else "audio/wav"
     return data, ct
 
+
+if __name__ == "__main__":
+    import sys
+    if "--download" in sys.argv:
+        download_models()
+    else:
+        print(status())

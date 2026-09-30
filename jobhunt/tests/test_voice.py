@@ -44,15 +44,20 @@ def run(check, cfg):
     check("interview feedback includes a speakable summary", "speech" in f and str(f["score"]) in f["speech"], f.get("speech"))
     check("the summary names the top tip, not the raw label", not f["speech"].split(": ", 1)[-1].startswith(("Cut ", "A little")) or True)
 
-    # --- voice module: unavailable path (Kokoro genuinely not installed here) ---
-    check("not available without kokoro installed", voice.available() is False)
-    st = voice.status()
-    check("status reports unavailable with a plain-words reason", st["available"] is False and "kokoro" in st["detail"].lower())
-    try:
-        voice.synthesize("hello")
-        check("synthesize raises when unavailable", False)
-    except voice.VoiceUnavailable:
-        check("synthesize raises VoiceUnavailable when Kokoro is missing", True)
+    # --- voice module: unavailable path (whatever is installed on this machine, pretend nothing is) ---
+    with mock.patch.object(voice, "_importable", lambda name: False):
+        check("not available without kokoro installed", voice.available() is False)
+        st = voice.status()
+        check("status reports unavailable with a plain-words reason", st["available"] is False and "kokoro" in st["detail"].lower())
+        try:
+            voice.synthesize("hello")
+            check("synthesize raises when unavailable", False)
+        except voice.VoiceUnavailable:
+            check("synthesize raises VoiceUnavailable when Kokoro is missing", True)
+    with mock.patch.object(voice, "_importable", lambda name: name in ("kokoro_onnx", "soundfile")), \
+            mock.patch.object(voice, "ONNX_MODEL", ROOT / "output" / "no-such-model.onnx"):
+        st = voice.status()
+        check("kokoro-onnx installed but model missing -> says exactly how to download it", not st["available"] and "--download" in st["detail"], st["detail"])
 
     check("clean_for_speech strips markdown and urls", voice.clean_for_speech("**Bold** see https://x.com/y for more") == "Bold see for more")
     check("clean_for_speech caps length", len(voice.clean_for_speech("x" * 5000)) == voice.MAX_CHARS)
@@ -78,7 +83,7 @@ def run(check, cfg):
     fake_soundfile.write = lambda path, data, rate: Path(path).write_bytes(b"RIFF-fake-wav-bytes")
 
     tmp_cache = ROOT / "output" / ".test_tts_cache"
-    with mock.patch.dict(sys.modules, {"kokoro": fake_kokoro, "numpy": fake_numpy, "soundfile": fake_soundfile}), \
+    with mock.patch.dict(sys.modules, {"kokoro": fake_kokoro, "numpy": fake_numpy, "soundfile": fake_soundfile, "kokoro_onnx": None}), \
             mock.patch.object(voice, "CACHE_DIR", tmp_cache), mock.patch.object(voice, "_pipeline", None):
         check("available() is True once kokoro/soundfile import", voice.available() is True)
         data, ct = voice.synthesized_content_type("Walk me through your background.")
@@ -90,3 +95,30 @@ def run(check, cfg):
         check("a second call for the same text is served from the disk cache, not re-synthesized", n_before == n_after and n_before >= 1)
     import shutil
     shutil.rmtree(tmp_cache, ignore_errors=True)
+
+    # --- ONNX backend (kokoro-onnx), against a stub: the same plumbing, the model's own sample rate, British voices
+    # get the en-gb phonemizer ---
+    fake_onnx = types.ModuleType("kokoro_onnx")
+    calls = []
+
+    class FakeKokoro:
+        def __init__(self, model, voices):
+            self.model = model
+
+        def create(self, text, voice, speed, lang):
+            calls.append((voice, lang))
+            return fake_array, 24000
+
+    fake_onnx.Kokoro = FakeKokoro
+    tmp2 = ROOT / "output" / ".test_tts_cache2"
+    with mock.patch.dict(sys.modules, {"kokoro_onnx": fake_onnx, "soundfile": fake_soundfile}), \
+            mock.patch.object(voice, "backend", lambda: "onnx"), mock.patch.object(voice, "CACHE_DIR", tmp2), \
+            mock.patch.object(voice, "_onnx", None):
+        data, ct = voice.synthesized_content_type("Tell me about yourself.", "bm_george")
+        check("onnx backend: synthesizes through kokoro_onnx.Kokoro.create", calls and len(data) > 0, calls)
+        check("onnx backend: British voice uses the en-gb phonemizer", calls[-1] == ("bm_george", "en-gb"), calls)
+        voice.synthesize("Tell me about yourself.", "af_bella")
+        check("onnx backend: American voice uses en-us", calls[-1] == ("af_bella", "en-us"), calls)
+    shutil.rmtree(tmp2, ignore_errors=True)
+    check("status lists labelled voices", all("label" in v for v in voice.status()["voices"]) or not voice.available())
+

@@ -18,7 +18,7 @@ async function say(text){
   ivSpeaking(true);
   try{
     if((await voiceStatus()).available){
-      const r=await fetch('/api/ai/voice/speak/?text='+encodeURIComponent(text));
+      const r=await fetch(speakUrl(text));
       if(r.ok){
         const a=new Audio(URL.createObjectURL(await r.blob())); IV.audio=a;
         await new Promise(res=>{ a.onended=a.onerror=a.onpause=res; a.play().catch(res); });
@@ -30,6 +30,9 @@ async function say(text){
     }
   }finally{ ivSpeaking(false); }
 }
+// Kokoro takes ~1.5s per new sentence; the speak endpoint's responses are immutable-cached, so fetching the next
+// line early makes it play instantly when its turn comes.
+function prefetchSpeech(text){ if(!text||!(VOICE_STATUS&&VOICE_STATUS.available)) return; fetch(speakUrl(text)).catch(()=>{}); }
 function hush(){ if(IV.audio) IV.audio.pause(); if(window.speechSynthesis) speechSynthesis.cancel(); }
 function ivSpeaking(on){ const s=$('#ivState'); if(s) s.textContent=on?'Interviewer is speaking…':(IV.answering?'Listening…':''); const o=$('#ivOrb'); if(o) o.className='iv-orb'+(on?' talk':IV.answering?' listen':''); }
 
@@ -187,12 +190,16 @@ async function ivSetup(){
       <label>Interviewer<select id="ivPersona"><option value="friendly">Friendly · encouraging, still wants specifics</option><option value="neutral" selected>Neutral · professional</option><option value="tough">Tough · probes every vague claim</option></select></label>
       <label class="iv-check"><input type="checkbox" id="ivAi" ${aiName?'checked':'disabled'}> AI interviewer
         <span class="co">${aiName?`(${esc(aiName)}: ${esc((ast.privacy||{})[aiName]||'')}) writes questions for this role, reacts to what you say with its own follow-ups, coaches each answer and shows a stronger version built from your own facts`:'(no model connected — install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> to turn this on; the built-in rules still run the interview)'}</span></label>
-      <div class="co">${vst.available?'Interviewer voice: Kokoro, local.':'Interviewer voice: your browser\'s built-in voice. Install Kokoro for a natural one (<code>pip install kokoro soundfile numpy</code>).'}
+      ${vst.available?`<label>Interviewer voice <span class="co">(Kokoro, runs on this machine)</span><span class="pxrow"><select id="ivVoice" style="flex:1">${vst.voices.map(v=>`<option value="${esc(v.id)}" ${v.id===(voicePref()||vst.default)?'selected':''}>${esc(v.label)}</option>`).join('')}</select>
+        <button type="button" class="sm" id="ivVoiceTry">▶ Preview</button></span></label>`:''}
+      <div class="co">${vst.available?'':`Interviewer voice: your browser's built-in voice, which sounds robotic. ${esc(vst.detail||'')}`}
         ${sttSupported()?'':'<br><b>This browser can\'t transcribe speech.</b> Use Chrome or Edge to answer out loud; you can still type answers here, and delivery is still measured if you allow the mic.'}</div>
       <div id="ivBase" class="iv-base"></div>
       <div><button type="button" class="go sm" id="ivStart">Start the interview</button></div>
     </div>
     <div class="block" style="margin-top:28px"><h3>Past interviews</h3><div id="ivHist"><p class="co">Loading…</p></div></div>`;
+  const vs=$('#ivVoice');
+  if(vs){ vs.onchange=()=>setVoicePref(vs.value); $('#ivVoiceTry').onclick=()=>{ setVoicePref(vs.value); say("Hi, I'll be your interviewer today. Tell me a little about yourself."); }; }
   $('#ivStart').onclick=()=>ivBegin($('#ivJob').value, +$('#ivLen').value, {each:$('#ivEach').checked, ai:$('#ivAi').checked, follow:$('#ivFollow').checked,
     persona:$('#ivPersona').value, kind:$('#ivKind').value, realistic:$('#ivReal').checked, camera:$('#ivCamOn').checked});
   ivHistory(); ivBaselinePanel();
@@ -227,6 +234,7 @@ async function ivBegin(jobId, n, opts){
     el.innerHTML='<p class="co">Starting the camera and loading the face-tracking model (first time only, a few MB)…</p>';
     try{ IV.cam=await startCamera(); }catch(e){ IV.cam=null; toast('Camera feedback is off: '+(e.message||'no camera'),'bad'); }
   }
+  prefetchSpeech(IV.questions[0]&&IV.questions[0].q);   // ready by the time the introduction finishes
   ivStage((IV.drillIds?'Drill':KIND_LABEL[IV.kind])+(IV.job.company?' · '+IV.job.company:''));
   if(IV.cam){ const pv=$('#ivCamPrev'); if(pv){ pv.srcObject=IV.cam.stream; pv.play().catch(()=>{}); } }
   window.onbeforeunload=()=>IV.results.length&&IV.i<IV.questions.length?'Leave the interview?':undefined;
@@ -271,6 +279,7 @@ async function ivAsk(){
   IV.nudged=false; IV.nudgeVoice=null; IV.interrupt=false; IV.clips=[]; if(IV.cam) IV.cam.reset();
   logLine('them', esc(q.q)+(q.by&&q.by!=='rules'?` <span class="co" title="Written by ${esc(q.by)}">✦</span>`:''));
   await say(q.q);
+  prefetchSpeech(IV.questions[IV.i+1]&&IV.questions[IV.i+1].q);   // synthesize the next question while they answer
   if(turn===IV.turn) startAnswer();   // not if they skipped or ended while it was being read
 }
 

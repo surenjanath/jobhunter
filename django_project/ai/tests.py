@@ -166,14 +166,19 @@ class AITests(ScannerDBTestCase):
         self.assertEqual(r.status_code, 200)       # unknown persona falls back to neutral, never errors
 
     def test_voice_status_reflects_whether_kokoro_is_installed(self):
-        with mock.patch("src.voice.available", return_value=False):
-            self.assertEqual(self.c.get("/api/ai/voice/status/").json(), {
-                "available": False,
-                "detail": "Not installed. pip install kokoro soundfile numpy (plus espeak-ng) for a spoken interviewer.",
-                "voices": []})
+        with mock.patch("src.voice._importable", return_value=False):
+            d = self.c.get("/api/ai/voice/status/").json()
+        self.assertFalse(d["available"])
+        self.assertIsNone(d["backend"])
+        self.assertEqual(d["voices"], [])
+        self.assertIn("pip install kokoro-onnx", d["detail"])
+        with mock.patch("src.voice.backend", return_value="onnx"):
+            d = self.c.get("/api/ai/voice/status/").json()
+        self.assertTrue(d["available"])
+        self.assertIn({"id": "af_heart", "label": "Heart · American, warm"}, d["voices"])
 
     def test_speak_503s_with_json_when_kokoro_missing_not_a_500_html_page(self):
-        with mock.patch("src.voice.available", return_value=False):
+        with mock.patch("src.voice._importable", return_value=False):
             r = self.c.get("/api/ai/voice/speak/?text=Hello")
         self.assertEqual(r.status_code, 503)
         self.assertIn("application/json", r["Content-Type"])

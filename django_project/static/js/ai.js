@@ -5,12 +5,16 @@ let AI_STATUS=null, VOICE_STATUS=null;
 async function aiStatus(){ if(!AI_STATUS){ try{ AI_STATUS=await jfetch('/api/ai/status/'); }catch(e){ AI_STATUS={providers:{},any:false,privacy:{}}; } } return AI_STATUS; }
 async function voiceStatus(){ if(!VOICE_STATUS){ try{ VOICE_STATUS=await jfetch('/api/ai/voice/status/'); }catch(e){ VOICE_STATUS={available:false,detail:'',voices:[]}; } } return VOICE_STATUS; }
 
+// the chosen Kokoro voice (Interview page picker); remembered per browser, harmless if storage is blocked
+const voicePref=()=>{ try{ return localStorage.getItem('jh_voice')||''; }catch(e){ return ''; } };
+const setVoicePref=v=>{ try{ localStorage.setItem('jh_voice',v); }catch(e){} };
+const speakUrl=text=>'/api/ai/voice/speak/?text='+encodeURIComponent(text)+(voicePref()?'&voice='+encodeURIComponent(voicePref()):'');
 // ---- speak (Kokoro TTS) and listen (the browser's own speech recognition — no server round trip) -------------------
 async function speak(text, btn){
   if(!text) return;
   const orig=btn?btn.innerHTML:''; if(btn){ btn.disabled=true; btn.textContent='…'; }
   try{
-    const r=await fetch('/api/ai/voice/speak/?text='+encodeURIComponent(text));
+    const r=await fetch(speakUrl(text));
     if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||`HTTP ${r.status}`); }
     const audio=new Audio(URL.createObjectURL(await r.blob()));
     audio.onended=()=>URL.revokeObjectURL(audio.src);
@@ -166,7 +170,7 @@ async function renderAiTab(j){
     const vst=await voiceStatus();
     body.innerHTML=`<p class="co">Pick a likely question, answer it — typed or spoken — and get scored on structure (situation, task, action, result), specifics and numbers. For a full spoken mock interview, open the <a href="/interview/?job=${id}">Interview page</a>. Nothing leaves this machine unless you switch AI on${vst.available?' (speech synthesis is local too — Kokoro, no cloud)':''}.</p>
       <div class="pxrow"><select id="pxQ" style="flex:1">${qs.map(q=>`<option>${esc(q.q)}</option>`).join('')||'<option>Tell me about a project you are proud of.</option>'}</select>
-      <button type="button" class="sm" id="pxPlayQ" ${vst.available?'':'disabled title="Install Kokoro to hear questions read aloud: pip install kokoro soundfile numpy"'}>🔊 Play question</button></div>
+      <button type="button" class="sm" id="pxPlayQ" ${vst.available?'':'disabled title="Install Kokoro to hear questions read aloud: pip install kokoro-onnx soundfile, then python -m src.voice --download"'}>🔊 Play question</button></div>
       <textarea id="pxA" rows="7" placeholder="Write your answer here (about 90–200 words)…, or use Speak my answer below" style="width:100%;margin-top:8px"></textarea>
       <div class="aibar">
         <button type="button" class="sm" id="pxMic" ${sttSupported()?'':'disabled title="Your browser does not support speech input — try Chrome or Edge"'}>🎙️ Speak my answer</button>

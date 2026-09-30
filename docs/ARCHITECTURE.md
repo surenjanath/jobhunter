@@ -68,7 +68,9 @@ must be included before `jobs.urls` because `/api/jobs/<path>/…` is greedy.
 **Voice** (`src/voice.py`): text-to-speech for the mock interview, via Kokoro — optional and lazily imported the
 same way an LLM provider or the embedding model is; `interview_feedback()` always returns a `speech` field (plain
 text, no dependency needed to build it), and `GET /api/ai/voice/speak/?text=...` turns any text into audio when
-Kokoro is installed. Speech *input* (the candidate's spoken answer) is the browser's own Speech Recognition API —
+Kokoro is installed. Two backends, tried in order: `kokoro-onnx` (ONNX Runtime; model files fetched with
+`python -m src.voice --download`) and the PyTorch `kokoro` package. Clips are cached on disk (least recently used
+dropped past 400), voice names are whitelisted and the speed is clamped. Speech *input* (the candidate's spoken answer) is the browser's own Speech Recognition API —
 no server component, no dependency, nothing sent anywhere for that half.
 
 ## Database (`jobhunt/output/jobhunt.db`)
