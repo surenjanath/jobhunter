@@ -73,3 +73,14 @@ class VoiceCueContractTests(TestCase):
         ruled = set(re.findall(r"'([a-z_]+)'", merge))
         self.assertGreater(len(emitted), 10)
         self.assertEqual(emitted - ruled, set())
+
+
+class ApiNotFoundTests(TestCase):
+    def test_unknown_api_path_is_json_404(self):
+        r = self.client.get("/api/definitely-not-a-thing/")
+        self.assertEqual(r.status_code, 404)
+        self.assertEqual(r["Content-Type"], "application/json")
+        self.assertIn("no such API endpoint", r.json()["error"])
+
+    def test_pages_have_an_icon(self):
+        self.assertIn('rel="icon"', self.client.get("/ledger/").content.decode())

@@ -85,3 +85,7 @@ def settings_view(request):
     except Exception as e:
         import traceback
         return Response({"error": str(e), "trace": traceback.format_exc()[:1000]}, status=500)
+
+
+def api_not_found(request):
+    return JsonResponse({"error": f"no such API endpoint: {request.path}"}, status=404)

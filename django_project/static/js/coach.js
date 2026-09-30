@@ -8,7 +8,7 @@ const jobOpts=(sel)=>trackedJobs().map(j=>`<option value="${esc(j.job_id)}" ${j.
 
 function coachTab(t){
   CS.tab=t;
-  document.querySelectorAll('#ivTabs [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+  document.querySelectorAll('#ivTabs [data-tab]').forEach(b=>{ b.classList.toggle('on',b.dataset.tab===t); b.setAttribute('aria-selected',String(b.dataset.tab===t)); });
   document.querySelectorAll('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==t);
   try{ history.replaceState(null,'',t==='practice'?location.pathname+location.search:'#'+t); }catch(e){}
   ({stories:renderStories, drills:renderDrills, real:renderReal, progress:renderProgress})[t]?.();

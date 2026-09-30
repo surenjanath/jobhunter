@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import include, path, re_path
 from core import views as core_views
 
 urlpatterns = [
@@ -27,4 +27,6 @@ urlpatterns = [
     path('api/', include('analytics.urls')),
     path('api/', include('letters.urls')),
     path('api/', include('trinidad.urls')),
+    # anything else under /api/ answers in JSON, so the UI shows "not found" rather than failing to parse an HTML page
+    re_path(r'^api/.*$', core_views.api_not_found, name='api-not-found'),
 ]

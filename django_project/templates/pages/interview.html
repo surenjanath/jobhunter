@@ -4,27 +4,27 @@
 {% block page %}
       <section class="sheet" id="interviewCard">
         <h1 class="sheet-title">Interview <span class="quiet">· Practise, prepare, follow up ·</span></h1>
-        <nav class="iv-tabs" id="ivTabs" aria-label="Interview sections">
-          <button type="button" data-tab="practice" class="on">Practice</button>
-          <button type="button" data-tab="stories">Stories</button>
-          <button type="button" data-tab="drills">Drills <span class="iv-badge" id="ivDueBadge" hidden></span></button>
-          <button type="button" data-tab="real">Real interviews <span class="iv-badge" id="ivInboxBadge" hidden></span></button>
-          <button type="button" data-tab="progress">Progress</button>
+        <nav class="iv-tabs" id="ivTabs" role="tablist" aria-label="Interview sections">
+          <button type="button" role="tab" aria-controls="pane-practice" aria-selected="true" data-tab="practice" class="on">Practice</button>
+          <button type="button" role="tab" aria-controls="pane-stories" aria-selected="false" data-tab="stories">Stories</button>
+          <button type="button" role="tab" aria-controls="pane-drills" aria-selected="false" data-tab="drills">Drills <span class="iv-badge" id="ivDueBadge" hidden></span></button>
+          <button type="button" role="tab" aria-controls="pane-real" aria-selected="false" data-tab="real">Real interviews <span class="iv-badge" id="ivInboxBadge" hidden></span></button>
+          <button type="button" role="tab" aria-controls="pane-progress" aria-selected="false" data-tab="progress">Progress</button>
         </nav>
-        <div data-pane="practice">
+        <div data-pane="practice" id="pane-practice" role="tabpanel">
           <p class="quiet">A full mock interview for one of your roles. The interviewer reads each question aloud, you answer by speaking,
             and you get an honest report on what you said and how you said it, including nerves. Voice and camera analysis run in
             your browser: no audio or video is uploaded or stored, only summary numbers.</p>
           <div id="ivBody"></div>
         </div>
-        <div data-pane="stories" hidden><div id="csStories"></div></div>
-        <div data-pane="drills" hidden><div id="csDrills"></div></div>
-        <div data-pane="real" hidden><div id="csReal"></div></div>
-        <div data-pane="progress" hidden><div id="csProgress"></div></div>
+        <div data-pane="stories" id="pane-stories" role="tabpanel" hidden><div id="csStories"></div></div>
+        <div data-pane="drills" id="pane-drills" role="tabpanel" hidden><div id="csDrills"></div></div>
+        <div data-pane="real" id="pane-real" role="tabpanel" hidden><div id="csReal"></div></div>
+        <div data-pane="progress" id="pane-progress" role="tabpanel" hidden><div id="csProgress"></div></div>
       </section>
 {% endblock %}
 
 {% block page_js %}
 <script src="{% static 'js/interview.js' %}?v=13"></script>
-<script src="{% static 'js/coach.js' %}?v=4"></script>
+<script src="{% static 'js/coach.js' %}?v=5"></script>
 {% endblock %}
