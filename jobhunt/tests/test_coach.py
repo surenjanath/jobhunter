@@ -153,4 +153,51 @@ def run(check, cfg):
                                 "location": "Remote", "remote": True}, ctx)
         check("fit: the title's core skill missing (Go) caps fit at 45 and says why",
               go["fit"] <= 45 and any("title names Go" in g for g in go["gaps"]), (go["fit"], go["gaps"][:2]))
+        # "Software Engineer" in a title is a job family, not a skill that covers the title's named craft
+        ctx["skills"]["Software Development"] = {"category": "Engineering practice", "years": 5}
+        go2 = matching.evaluate({"title": "Senior Go Software Engineer", "company": "X", "description": "Requirements: 5 years of Go. PostgreSQL. REST APIs.",
+                                 "location": "Remote", "remote": True}, ctx)
+        check("fit: having 'Software Development' doesn't lift the Go title cap", go2["fit"] <= 45, go2["fit"])
+        ctx["titles"].append(("data analyst", 1.0))
+        check("title: sharing only the job-family word ('analyst') is a weak match",
+              matching.title_alignment("Senior Lab Analyst", ctx)[0] < 0.3, matching.title_alignment("Senior Lab Analyst", ctx))
+        ctx["skills"].update({k: {"category": "Engineering practice", "years": 2} for k in ("Testing", "Production Support")})
+        check("title: a generic ask in the title ('QA') is not a title match",
+              matching.title_alignment("QA/QC Inspector – Mechanical", ctx)[0] < 0.3, matching.title_alignment("QA/QC Inspector – Mechanical", ctx))
+        check("title: the target itself still matches fully", matching.title_alignment("Audit Data Analyst", ctx)[0] == 1.0)
+        # a developer posting that names no technology is read from the resume alone, not dragged down by keywords
+        generic = {"title": "Systems Developer", "company": "X", "location": "Trinidad", "region": "Trinidad & Tobago", "kw_fit": 5,
+                   "description": "Developing and maintaining software applications. Integrating applications, databases, APIs and third-party systems."}
+        ctx["skills"]["Databases"] = {"category": "Data & Databases", "years": 3}
+        gm = matching.evaluate(generic, ctx)
+        check("fit: generic developer posting ignores a near-zero keyword score", gm["fit"] == gm["fit_profile"], (gm["fit"], gm["fit_profile"]))
+        nf = matching.evaluate({"title": "Barista", "company": "X", "location": "Trinidad", "kw_fit": 5, "description": "Serve coffee. Entry level."}, ctx)
+        check("fit: an out-of-field posting still blends the keyword score in", nf["fit"] < nf["fit_profile"], (nf["fit"], nf["fit_profile"]))
+    from src import score as _score
+    kcfg = {"scoring": {"strong_signals": {"agent": 8}, "context_signals": {"tobago": 14}, "score_divisor": 100}}
+    human = _score.score_job({"title": "Reservations Agent", "description": "Our agents assist passengers. Agent duties in Tobago.", "location": "Tobago"}, kcfg)
+    ai = _score.score_job({"title": "AI Engineer", "description": "Build LLM agent workflows. Agent evals.", "location": "Remote"}, kcfg)
+    check("keywords: 'agent' in a non-AI posting is a person, not an AI-agent signal", human["fit_score"] <= 10 < ai["fit_score"], (human["fit_score"], ai["fit_score"]))
+    from src import resume_parse
+    rp = resume_parse.parse_resume("# A B\n\n## EXPERIENCE\n\n### Acme\n**Engineer** · Jan 2022 – Jan 2024\n\n- Built Django portals on PostgreSQL.\n\n"
+                                   "### Globex\n**Engineer** · Jan 2020 – Jan 2022\n\n- Wrote Python scripts.\n\n## SKILLS\n\nPython, Django\n", today=date(2024, 6, 1))
+    check("resume: a Django role counts toward Python years", rp["skills"]["Python"]["years"] >= 3.9, rp["skills"].get("Python"))
+    long_cv = ("# A B\n\n## Work Experience\n\n### Acme Group (Acme Life · Acme N.V.) — 2021 – Present\n\nFive years with the same business.\n\n"
+               "| Role | Dates |\n| --- | --- |\n| **Data Engineer**, Acme N.V. | Feb 2023 – Present |\n"
+               "| **Project Assistant to the Managing Director**, Acme Life | 2021 – Feb 2023 |\n\n"
+               "#### Group Projects: Project Assistant (2021 – Feb 2023), then Data Engineer (Feb 2023 – Present)\n\n"
+               "- Built Django portals for policy administration with an audit trail.\n- Synced live inventory to the website.\n"
+               "- Deployed with Docker.\n\n## Independent & Side Projects (2023 – 2030)\n\n- A teaching app in React.\n\n"
+               "## Education\n\n**UWI:** BSc Actuarial Science, 2016 – 2021\n\n## Awards & Leadership\n\n- Head Prefect, Some Secondary School\n\n"
+               "## Appendix: Full Project Catalogue\n\n| GuestHub | Contact master and guest lists |\n" + "Filler line about systems.\n" * 900)
+    lp = resume_parse.parse_resume(long_cv, today=date(2024, 6, 1))
+    check("resume: an employer line with overall dates is context, not a role; table rows and nested headings are roles",
+          [r["title"] for r in lp["roles"]][:2] == ["Data Engineer", "Project Assistant to the Managing Director"]
+          and all(r["company"] for r in lp["roles"]) and not any("Acme Group" in r["title"] for r in lp["roles"]), [(r["title"], r["company"]) for r in lp["roles"]])
+    check("resume: side projects aren't employment and can't end in the future", lp["years_experience"] == 3.5, lp["years_experience"])
+    check("resume: 'Assistant to the Managing Director' is not a director", lp["seniority"] != "lead", lp["seniority"])
+    check("resume: education stops at the next section ('Contact master' in an appendix is not a master's)", lp["highest_education"] == "bachelor", lp["education"])
+    check("resume: passing words in a long resume aren't skills (inventory, policy administration, audit trail, teaching)",
+          not {"Supply Chain", "Administration", "Auditing", "Teaching"} & set(lp["skills"]), sorted(lp["skills"]))
+    check("resume: frameworks imply Software Development and SQL", {"Software Development", "SQL", "Databases"} <= set(rp["skills"]), sorted(rp["skills"]))
 

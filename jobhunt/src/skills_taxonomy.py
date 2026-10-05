@@ -29,7 +29,7 @@ _add("Languages",
      "Bash|shell scripting|shell script", "VBA|visual basic for applications", "HTML|html5", "CSS|css3|scss|sass")
 _add("Web & Backend",
      "Django|django rest framework|drf", "Flask", "FastAPI", "Node.js|nodejs", "Express|express.js",
-     "React|reactjs|react.js", "Vue|vue.js|vuejs", "Angular", "Next.js|nextjs", "REST APIs|rest api|restful|rest apis",
+     "React|reactjs|react.js", "React Native|expo", "Vue|vue.js|vuejs", "Angular", "Next.js|nextjs", "REST APIs|rest api|restful|rest apis",
      "GraphQL", "Celery", "WebSockets|websocket", "Webhooks|webhook", "Spring Boot", ".NET|dotnet|asp.net",
      "Laravel", "Tailwind|tailwindcss", "Bootstrap")
 _add("Data & Databases",
@@ -37,7 +37,7 @@ _add("Data & Databases",
      "Oracle Database|oracle db", "Supabase", "Elasticsearch|opensearch", "Snowflake", "BigQuery", "Databricks",
      "ETL|elt|data pipelines|data pipeline", "Data Modeling|data modelling|database design|database architecture",
      "Pandas", "NumPy", "SQLAlchemy", "Airflow|apache airflow", "dbt", "Spark|pyspark|apache spark", "Kafka",
-     "Data Warehousing|data warehouse", "Data Engineering", "Data Analysis|data analytics", "Web Scraping|scraping|web crawling|beautifulsoup|scrapy|selenium")
+     "Data Warehousing|data warehouse", "Data Engineering", "Databases|database|relational databases|database management", "Data Analysis|data analytics", "Web Scraping|scraping|web crawling|beautifulsoup|scrapy|selenium")
 _add("AI & ML",
      "LLMs|llm|large language models|large language model", "RAG|retrieval augmented generation|retrieval-augmented generation",
      "Multi-Agent Systems|multi-agent|multi agent|agentic|ai agents|ai agent", "Prompt Engineering|prompt design|prompt engineer",
@@ -51,16 +51,18 @@ _add("Cloud & DevOps",
      "Microsoft Fabric", "Monitoring & Observability|observability|datadog|grafana|prometheus|application monitoring|apm", "Server Administration|sysadmin|server configuration")
 _add("Automation & Tools",
      "n8n", "Zapier", "Power Automate", "Excel|microsoft excel|advanced excel", "Power BI|powerbi", "Tableau", "Google Sheets", "Jira",
-     "Airtable", "Retool", "Process Automation|workflow automation|automation|rpa", "Microsoft Office|ms office|office 365|powerpoint",
+     "Airtable", "Retool", "Process Automation|workflow automation|automation|rpa|automating|automate", "Microsoft Office|ms office|office 365|powerpoint",
      "Cursor|claude code|ai-assisted development|copilot", "Matplotlib", "Data Visualization|dashboards|dashboard")
 _add("Engineering practice",
-     "Software Architecture|system design|solution architecture", "API Integration|api integrations|third-party integrations|system integration",
+     "Software Development|software engineering|software developer|software engineer|web development|application development|"
+     "software applications|web applications|web-based platforms|developing software|production software",
+     "Software Architecture|system design|solution architecture", "API Integration|api integrations|third-party integrations|third-party systems|system integration|apis",
      "Testing|unit testing|pytest|test automation|qa", "Agile|scrum|kanban", "Technical Documentation|documentation",
      "Code Review", "Production Support|on-call|on call|incident response|troubleshooting", "Requirements Gathering|requirements analysis|business analysis",
      "Solutions Engineering|solutions engineer|pre-sales|presales", "Customer Implementation|customer onboarding|client onboarding|implementation engineer", "Legacy Systems|legacy migration|reverse engineering")
 _add("Insurance & Finance",
      "Insurance|insurtech|reinsurance", "Claims|claims processing|claims adjudication", "Underwriting", "Actuarial|actuarial science|actuary",
-     "Policy Administration|policy management", "Regulatory Reporting|regulatory compliance|regulatory requirements", "Compliance|compliance|grc", "Risk Management",
+     "Policy Administration|policy management", "Regulatory Reporting|regulatory compliance|regulatory requirements|regulatory returns|regulatory return", "Compliance|compliance|grc", "Risk Management",
      "Accounting|bookkeeping|general ledger|accounts payable|accounts receivable", "Financial Reporting|financial analysis|financial statements",
      "Auditing|audit", "Banking|retail banking|commercial banking", "Payroll", "Budgeting|forecasting|fp&a", "Reconciliation|bank reconciliation",
      "Treasury", "Credit Analysis", "Tax|taxation", "IFRS", "QuickBooks|sage|xero|sap", "Fintech|payments")
@@ -90,6 +92,8 @@ SOFT = {"Communication", "English", "Leadership", "Negotiation", "Stakeholder Ma
         "Research", "Training", "Administration", "Data Entry", "Microsoft Office", "Education", "Quality Assurance",
         "Health and Safety", "Operations Management"}
 CATEGORY: dict[str, str] = {k: v[0] for k, v in _T.items()}
+# Broad areas whose words turn up in almost any posting or resume ("reporting", "training", "inventory").
+BROAD_CATEGORIES = {"Business & Operations", "Domains", "Insurance & Finance", "Languages (spoken)", "Healthcare & Education", "Engineering & Trades"}
 
 
 def _pattern(alias: str) -> str:
@@ -116,6 +120,15 @@ for _canon, (_cat, _aliases) in _T.items():
     _GATES[_canon] = tuple(dict.fromkeys(max(re.split(r"[\s/]+", a.lower()), key=len) for a in dict.fromkeys(_aliases + [_canon])))
 _STRICT_RE = {c: re.compile(p) for c, p in _STRICT_CASE.items()}
 
+# Phrases that contain a skill's word but mean something else: "policy administration" and "server administration" are
+# not office administration, an "audit trail" is a software feature, not auditing. These occurrences are not counted.
+_NOT = {c: re.compile(p, re.I) for c, p in {
+    "Administration": r"\b(?:policy|server|systems?|database|network|pension|linux|windows|ubuntu|benefits?)\s+administration\b",
+    "Auditing": r"\baudit[- ](?:trails?|logs?|logging|history|records?|tables?|events?)\b",
+    ".NET": r"\basp\.net\s+viewstate\b",      # scraping an ASP.NET site is not .NET development
+    "Training": r"\b(?:model|lora|classifier)\s+training\b|\btraining (?:data|set|run|loop)s?\b",
+}.items()}
+
 
 @lru_cache(maxsize=8192)
 def _find(text: str) -> tuple:
@@ -128,7 +141,9 @@ def _find(text: str) -> tuple:
             if not any(g in low for g in _GATES[canon]):
                 continue
             n = len(rx.findall(text))
-        if n:
+            if n and canon in _NOT:
+                n -= len(_NOT[canon].findall(text))
+        if n > 0:
             out[canon] = n
     return tuple(out.items())
 
@@ -138,6 +153,29 @@ def find_skills(text: str, *, min_count: int = 1) -> dict[str, int]:
     if not text:
         return {}
     return {k: v for k, v in _find(text) if v >= min_count}
+
+
+# Using the key means using the value: a role that says "Django" is Python work even if it never says "Python", and a
+# resume full of frameworks is software development even if it never uses those words. Read on the RESUME side only
+# (resume_parse), so years of use and generic asks ("experience in software development") are credited properly.
+IMPLIES: dict[str, set[str]] = {
+    **{k: {"Python", "Software Development"} for k in ("Django", "Flask", "FastAPI", "Celery")},
+    **{k: {"Python"} for k in ("Pandas", "NumPy", "SQLAlchemy", "Matplotlib")},
+    **{k: {"SQL", "Databases"} for k in ("PostgreSQL", "MySQL", "SQLite", "SQL Server", "Oracle Database")},
+    **{k: {"Databases"} for k in ("SQL", "MongoDB", "Supabase", "Data Modeling")},
+    **{k: {"JavaScript", "Software Development"} for k in ("React", "Vue", "Node.js", "Express", "Next.js")},
+    "Angular": {"TypeScript", "Software Development"}, "Spring Boot": {"Java", "Software Development"},
+    "Laravel": {"PHP", "Software Development"}, ".NET": {"Software Development"},
+    "REST APIs": {"API Integration"}, "GitHub Actions": {"CI/CD"},
+}
+
+
+def implied(skills) -> set[str]:
+    """Skills that follow from the ones in `skills` (not including those already present)."""
+    out: set[str] = set()
+    for s in skills:
+        out |= IMPLIES.get(s, set())
+    return out - set(skills)
 
 
 def related(skill: str) -> set[str]:

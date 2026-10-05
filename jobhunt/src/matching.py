@@ -270,6 +270,11 @@ def parse_pay(text: str, *, local: bool = False, fx: float = 6.78) -> dict | Non
 _LEVEL_WORDS = {"senior", "sr", "junior", "jr", "lead", "principal", "staff", "ii", "iii", "iv", "i", "assistant", "associate", "chief", "head"}
 
 
+# job-family words: on their own they don't make two titles alike (see title_alignment)
+_ROLE_NOUNS = set(retrieval.tokens("engineer developer analyst manager officer specialist architect consultant administrator "
+                                   "coordinator technician programmer scientist designer supervisor executive representative agent"))
+
+
 def _title_tokens(t: str) -> set[str]:
     return {w for w in retrieval.tokens(re.sub(r"[/,()\-–]", " ", t)) if w not in _LEVEL_WORDS}
 
@@ -283,10 +288,13 @@ def title_alignment(title: str, ctx: dict) -> tuple[float, str]:
         tt = _title_tokens(target)
         if not tt:
             continue
-        inter = len(jt & tt)
+        common = jt & tt
+        inter = len(common)
         sim = inter / len(tt) if inter else 0.0
         if target.lower() in title.lower():
             sim = 1.0
+        elif common and (common <= _ROLE_NOUNS or len(tt) == 1):   # ...nor does one word of a two-word title ("Project …")
+            sim *= 0.4      # sharing only "engineer" / "analyst" says little: a Lab Analyst is not a Data Analyst
         elif inter and inter / len(jt | tt) >= 0.34:
             sim = max(sim, 0.75)
         s = sim * w
@@ -296,8 +304,14 @@ def title_alignment(title: str, ctx: dict) -> tuple[float, str]:
     # resume): "Python Developer" for a developer, "Accountant" for an accountant — but a developer who happens to list
     # Supply Chain isn't a title match for "Logistics Officer"
     cats = Counter(v.get("category") for v in ctx["skills"].values())
-    focus = {c for c, n in cats.items() if n >= 3 and c not in ("Domains", "Languages (spoken)")}
-    skills_in_title = [s for s in tax.find_skills(title) if s in ctx["skills"] and ctx["skills"][s].get("category") in focus]
+    # ...and a broad business/finance area only counts as yours when it is a real share of the resume: an engineer whose
+    # long resume mentions inventory, training and administration in passing is not a procurement or admin candidate
+    total = sum(cats.values()) or 1
+    focus = {c for c, n in cats.items() if n >= 3 and c not in ("Domains", "Languages (spoken)")
+             and (c not in _GENERIC_CATS or n / total >= 0.2)}
+    # ...and not for an ask that every field shares: "QA" or "Incident Response" in a title doesn't make it your kind of job
+    skills_in_title = [s for s in tax.find_skills(title) if s in ctx["skills"] and ctx["skills"][s].get("category") in focus
+                       and (s not in _GENERIC_ASKS or s == "Software Development")]
     if skills_in_title:
         s = 0.7 + min(0.25, 0.08 * len(skills_in_title))
         if s > best:
@@ -307,7 +321,12 @@ def title_alignment(title: str, ctx: dict) -> tuple[float, str]:
 
 # Broad skills that many unrelated jobs mention ("communication", "reporting", "supply chain"). They still count, but
 # less, so a clerical posting doesn't look like a great match just because you also list "regulatory reporting".
-_GENERIC_CATS = {"Business & Operations", "Domains", "Insurance & Finance", "Languages (spoken)", "Healthcare & Education", "Engineering & Trades"}
+_GENERIC_CATS = tax.BROAD_CATEGORIES
+_KW_WEIGHT = 0.3            # share of fit given to the scan-time keyword score (score.py); the rest is resume-based
+_KW_WEIGHT_IN_FIELD = 0.15  # ...when the posting is clearly in the candidate's field (see evaluate)
+# asks that describe the job rather than name a technology ("software development", "testing", "databases")
+_GENERIC_ASKS = {"Software Development", "Databases", "API Integration", "Testing", "Technical Documentation", "Production Support",
+                 "Process Automation", "Requirements Gathering", "Agile", "Code Review", "Software Architecture"}
 _PRIOR_MASS = 1.2   # pseudo-weight of "unknown" evidence: with few skills named, coverage stays near neutral
 
 
@@ -491,7 +510,14 @@ def evaluate(job: dict, ctx: dict, *, deep: bool = False) -> dict:
     known = [(n, v, w) for n, v, w in parts if v is not None]
     profile_fit = round(100 * sum(v * w for _, v, w in known) / sum(w for *_, w in known)) if known else 0
     kw_fit = int(job["kw_fit"] if job.get("kw_fit") is not None else (job.get("fit_score") or 0))  # keyword-pass fit, never a blended one
-    fit = round(0.7 * profile_fit + 0.3 * kw_fit) if kw_fit or known else profile_fit
+    # The keyword pass is triage: it is good at saying "this is not your kind of job" and poor at grading one that is.
+    # So once the resume-based reading shows the posting is in your field it gets a smaller say, and none when the
+    # posting names no technology for it to read ("develop and maintain software applications").
+    own = [m for m in sk["matched"] if tax.CATEGORY.get(m["name"]) not in _GENERIC_CATS and m["name"] not in tax.SOFT]
+    in_field = (title_v or 0) >= 0.5 or len(own) >= 2
+    names_tech = any(tax.CATEGORY.get(s) not in _GENERIC_CATS and s not in tax.SOFT and s not in _GENERIC_ASKS for s in a["skills"])
+    kw_w = _KW_WEIGHT if not in_field else (_KW_WEIGHT_IN_FIELD if names_tech else 0.0)
+    fit = round((1 - kw_w) * profile_fit + kw_w * kw_fit) if kw_fit or known else profile_fit
 
     # reliability of the evidence behind the numbers
     signal = (min(sk["n"], 6) / 6) * 0.5 + min(a["desc_chars"], 1500) / 1500 * 0.5
@@ -599,7 +625,8 @@ def evaluate(job: dict, ctx: dict, *, deep: bool = False) -> dict:
     # a skill named in the job TITLE is the core of the role ("Senior Go Engineer", "Salesforce Admin"): if you have
     # NONE of the title's skills, matching the rest of the posting doesn't make it a fit. Titles that list a stack
     # ("Python/Django + VueJS") are fine when you have part of it, and domain words ("…, Internal Audit") don't count.
-    title_items = [i for i in sk["items"] if i["name"] in set(tax.find_skills(job.get("title") or "")) - tax.SOFT]
+    # ("Software Engineer" in a title is a job family, not a named skill: having it doesn't cover "Senior Go Software Engineer".)
+    title_items = [i for i in sk["items"] if i["name"] in set(tax.find_skills(job.get("title") or "")) - tax.SOFT - _GENERIC_ASKS]
     craft = [i for i in title_items if i.get("category") not in ("Domains", "Insurance & Finance", "Languages (spoken)")]
     if craft and not any(i["status"] == "have" for i in title_items):
         for i in craft:

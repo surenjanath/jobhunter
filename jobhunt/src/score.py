@@ -51,6 +51,11 @@ _HUMAN_AGENT = re.compile(
     r"direct sales|shipping|booking|ticket\w*|field|estate|talent|leasing)\s+agents?\b")
 
 
+# ...and outside those, "agent" only means an AI agent when the posting talks about AI at all (a Reservations Agent,
+# a Warehouse Agent or a Customer Contact Agent is a person).
+_AI_CONTEXT = re.compile(r"\b(ai|a\.i\.|llms?|genai|agentic|multi-agent|language models?|machine learning|autonomous|chatbots?|copilot)\b")
+
+
 def _count(text: str, phrase: str) -> int:
     """Whole-word-ish occurrence count, capped so one spammy word can't dominate."""
     pattern = r"(?<!\w)" + re.escape(phrase) + r"(?!\w)"
@@ -75,7 +80,7 @@ def score_job(job: dict, cfg: dict) -> dict:
     hits: list[str] = []
 
     # "agent" is an AI-agent signal; human job titles ("sales agent", "guest relations agent") are not.
-    ai_blob = _HUMAN_AGENT.sub(" ", blob)
+    ai_blob = _HUMAN_AGENT.sub(" ", blob) if _AI_CONTEXT.search(blob) else ""
 
     for group in ("strong_signals", "context_signals"):
         for phrase, weight in (scoring.get(group) or {}).items():

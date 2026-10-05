@@ -45,7 +45,8 @@ For one job it produces fit, odds, interview chance, per-requirement resume evid
 skills, tailoring advice and the list of factors behind the odds.
 
 - **Fit** = weighted blend of skill coverage (32%), requirement evidence (18%), title alignment (20%), experience (10%),
-  domain (6%) and preferences (14%), blended 70/30 with the keyword score. Soft skills ("communication") are neutral,
+  domain (6%) and preferences (14%), blended 70/30 with the keyword score (85/15 once the posting is
+  clearly in your field, and resume-only when such a posting names no technology). Soft skills ("communication") are neutral,
   generic categories weigh less, and coverage is shrunk toward neutral when a posting names few skills.
 - **Odds** are a log-odds model: `logit(prior) + Σ adjustments`, capped at 65%. Adjustments: qualification match,
   seniority gap, geographic access, freshness, preferences, domain edge, blockers, avoid-list. `likelihood` is the

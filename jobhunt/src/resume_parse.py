@@ -127,6 +127,10 @@ SECTION_ALIASES = {
 _HEADING_TO_KEY = {alias: key for key, aliases in SECTION_ALIASES.items() for alias in aliases}
 
 
+_HEADING_HINTS = [(r"\bappendix\b|\blinks?\b|\breferences?\b", "other"), (r"\bprojects?\b|open[- ]source|published work|portfolio", "projects"),
+                  (r"\bawards?\b|highlights|achievements|leadership", "awards"), (r"certificat", "certifications")]
+
+
 def _strip_md(line: str) -> str:
     line = re.sub(r"^\s{0,3}#{1,6}\s*", "", line)
     line = re.sub(r"[*_`]{1,3}", "", line)
@@ -136,9 +140,22 @@ def _strip_md(line: str) -> str:
 def _heading_key(line: str) -> str | None:
     t = _strip_md(line).strip(":").strip().lower()
     t = re.sub(r"\s+", " ", t)
-    if not t or len(t) > 40:
+    if not t or len(t) > 60:
         return None
-    return _HEADING_TO_KEY.get(t)
+    if t in _HEADING_TO_KEY:
+        return _HEADING_TO_KEY[t]
+    if not re.match(r"^\s{0,3}#{1,2}\s", line):
+        return None
+    # a top-level markdown heading that isn't a stock name: go by what it is about, so a long resume's extra sections
+    # ("Independent & Side Projects (2025 – 2026)", "Awards & Leadership", "Appendix: Full Project Catalogue") end the
+    # section before them instead of being read as more employment or more education
+    t = re.sub(r"\s*\(.*?\)\s*$", "", t)
+    if t in _HEADING_TO_KEY:
+        return _HEADING_TO_KEY[t]
+    for rx, key in _HEADING_HINTS:
+        if re.search(rx, t):
+            return key
+    return None
 
 
 def split_sections(text: str) -> dict[str, str]:
@@ -225,21 +242,44 @@ def parse_roles(exp_text: str, today: date | None = None) -> list[dict]:
     lines = exp_text.split("\n")
     idx = [i for i, ln in enumerate(lines) if RANGE_RE.search(_strip_md(ln)) and not ln.strip().startswith(("-", "•", "*  "))
            and not re.match(r"^\s*[-•]", ln)]
-    roles: list[dict] = []
-    for n, i in enumerate(idx):
+    today = today or date.today()
+    now = today.year * 12 + today.month - 1
+    heads = []
+    for i in idx:
         line = _strip_md(lines[i])
-        m = RANGE_RE.search(line)
-        s = _to_month(m.group(1), today=today)
-        e = _to_month(m.group(2), end=True, today=today)
+        ms = list(RANGE_RE.finditer(line))
+        # "Analyst (2021 – 2023), then Engineer (2023 – Present)": one header, one stretch of time
+        ss = [_to_month(m.group(1), today=today) for m in ms]
+        es = [_to_month(m.group(2), end=True, today=today) for m in ms]
+        s = min((x for x in ss if x is not None), default=None)
+        e = min(max((x for x in es if x is not None), default=-1), now)   # "2025 – 2026" can't end after today
+        head = _clean_line(re.sub(r"\(\s*\)", "", RANGE_RE.sub(" ", line)).replace(" ,", ","))
+        heads.append((i, s, e if e >= 0 else None, head, ms[-1].group(2)))
+    roles: list[dict] = []
+    umbrella = ""
+    for n, (i, s, e, head, end_tok) in enumerate(heads):
         if s is None or e is None or e < s:
             continue
-        head = _clean_line(line[:m.start()] + " " + line[m.end():])
+        end_line = idx[n + 1] - 1 if n + 1 < len(idx) else len(lines)
+        n_bullets = sum(1 for b in lines[i + 1:end_line] if re.match(r"^\s*[-•*]\s+", b))
+        nxt = heads[n + 1] if n + 1 < len(heads) else None
+        table = lines[i].lstrip().startswith("|")
+        # an employer line with its overall dates, followed by the roles held there: context, not a role of its own
+        if (not table and head and not _looks_like_title(head) and n_bullets < 2 and nxt and nxt[1] is not None and nxt[2] is not None
+                and s <= nxt[1] and nxt[2] <= e):
+            umbrella = re.sub(r"\s*\(.*$", "", head)
+            continue
         prev = ""
         for j in range(i - 1, max(-1, i - 3), -1):
             cand = _clean_line(lines[j]) if j >= 0 else ""
-            if cand and not re.match(r"^\s*[-•]", lines[j]) and not RANGE_RE.search(cand):
+            if cand and not re.match(r"^\s*[-•|]", lines[j]) and not RANGE_RE.search(cand):
                 prev = cand
                 break
+        if table:   # a "| Role, Employer | Dates |" row
+            head = _clean_line(head.split("|")[0])
+            first, _, rest = head.partition(", ")
+            if rest and _looks_like_title(first):
+                head, prev = first, rest
         title, company = "", ""
         parts = [p.strip() for p in re.split(r"\s+(?:at|@)\s+|\s*[|·•]\s*|\s+[—–]\s+", head) if p.strip()]
         if head and _looks_like_title(head) and len(parts) <= 1:
@@ -253,7 +293,6 @@ def parse_roles(exp_text: str, today: date | None = None) -> list[dict]:
             company, title = head, prev if _looks_like_title(prev) else ""
         else:
             company, title = prev, ""
-        end_line = idx[n + 1] - 1 if n + 1 < len(idx) else len(lines)
         # bullets follow the header, but a company line that PRECEDES the next header belongs to that next role
         body_lines = lines[i + 1:end_line]
         while body_lines and body_lines[-1].strip() and not re.match(r"^\s*[-•*]", body_lines[-1]) and n + 1 < len(idx):
@@ -261,9 +300,9 @@ def parse_roles(exp_text: str, today: date | None = None) -> list[dict]:
         bullets = [_clean_line(b) for b in body_lines if re.match(r"^\s*[-•*]\s+", b) or len(b.strip()) > 60]
         bullets = [b for b in bullets if b]
         roles.append({
-            "title": title[:120], "company": re.sub(r"\s*\(.*?\)\s*$", "", company)[:120] if company else "",
-            "start": month_label(s), "end": "" if re.fullmatch(_PRESENT, m.group(2).strip(), re.I) else month_label(e),
-            "current": bool(re.fullmatch(_PRESENT, m.group(2).strip(), re.I)),
+            "title": title[:120], "company": (re.sub(r"\s*\(.*?\)\s*$", "", company)[:120] if company else "") or umbrella[:120],
+            "start": month_label(s), "end": "" if re.fullmatch(_PRESENT, end_tok.strip(), re.I) else month_label(e),
+            "current": bool(re.fullmatch(_PRESENT, end_tok.strip(), re.I)),
             "months": e - s + 1, "bullets": bullets, "_span": (s, e),
         })
     return roles
@@ -275,7 +314,7 @@ def parse_roles(exp_text: str, today: date | None = None) -> list[dict]:
 
 _DEGREES = [
     ("doctorate", r"\b(ph\.?d|doctorate|doctor of)\b"),
-    ("master", r"\b(m\.?sc|m\.?s\b|m\.?a\b|mba|master'?s?|master of)\b"),
+    ("master", r"\b(m\.?sc|m\.?s\b|m\.?a\b|mba|master'?s|masters|master of)\b"),
     ("bachelor", r"\b(b\.?sc|b\.?s\b|b\.?a\b|b\.?eng|bachelor'?s?|bachelor of|undergraduate degree|b\.?tech)\b"),
     ("associate", r"\b(associate'?s?|a\.?a\.?s?\b|diploma|higher national)\b"),
     ("secondary", r"\b(cape|csec|a-?levels?|o-?levels?|high school|secondary school|ged)\b"),
@@ -331,6 +370,7 @@ _DOMAIN_SKILLS = {"Insurance", "Claims", "Underwriting", "Actuarial", "Policy Ad
 
 def seniority(years: float, titles: list[str]) -> str:
     t = " ".join(titles).lower()
+    t = re.sub(r"\b(?:to|of) the [a-z ]*?(?:director|chief|vp|president)\b", " ", t)   # "Assistant to the Managing Director" isn't one
     if re.search(r"\b(principal|staff|director|head of|chief|vp)\b", t):
         return "lead"
     if re.search(r"\b(senior|sr\.?|lead)\b", t) or years >= 8:
@@ -364,13 +404,23 @@ def parse_resume(text: str, *, today: date | None = None) -> dict:
     found = tax.find_skills(body_without_headings)
     in_skills = set(tax.find_skills(skills_sec))
     skills: dict[str, dict] = {}
+    # what each role used: the skills it names plus what those imply (a "Django" role is a Python role)
+    role_skills = []
+    for r in roles:
+        named = set(tax.find_skills(" ".join(r["bullets"]) + " " + r["title"]))
+        role_skills.append(named | tax.implied(named))
+    found = {**{s: 0 for s in tax.implied(found)}, **found}
+    # A long resume mentions many things in passing ("syncs live inventory", "a teaching assistant app"). A word from a
+    # broad business/domain area is only a skill when the Skills section lists it or the resume keeps coming back to it.
+    need = max(1, round(len(text) / 15000))
     for canon, n in found.items():
         cat = tax.CATEGORY.get(canon, "Other")
+        if cat in tax.BROAD_CATEGORIES and canon not in in_skills and n < need:
+            continue
         role_spans = []
         recent = 0
-        for r, sp in zip(roles, spans):
-            blob = " ".join(r["bullets"]) + " " + r["title"]
-            if canon in tax.find_skills(blob):
+        for used, sp in zip(role_skills, spans):
+            if canon in used:
                 role_spans.append(sp)
                 recent = max(recent, sp[1])
         yrs = round(union_months(role_spans) / 12, 1) if role_spans else 0.0
