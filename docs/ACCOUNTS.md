@@ -73,3 +73,9 @@ queries.serialize(job, status_map.get(job.job_id), match_map.get(job.job_id))
 `overlay_for` returns real lookup dicts for a signed-in request, or dicts that always report `UNSET` for a
 guest — so the same call works unchanged either way. For scoring against an account's own resume directly (not
 through `serialize()`), use `accounts.context.matching_context(request)` in place of `src.matching.current_context()`.
+
+## AI keys
+
+Each account keeps its own AI provider keys and choices (**Settings → AI providers**); nobody else can see or use them.
+Where an account has set nothing, the site-wide settings an admin added are used. See
+[CONFIGURATION.md](CONFIGURATION.md#ai-providers).

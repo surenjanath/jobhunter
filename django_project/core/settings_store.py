@@ -179,12 +179,12 @@ def update_settings(payload):
             raise ValueError("cover_letter must be an object")
         prof_cl = prof.get("cover_letter", {})
         if "provider" in cl:
-            if cl["provider"] not in ("auto", "claude_code", "ollama", "anthropic", "template"):
+            if cl["provider"] not in _llm().PROVIDERS:
                 raise ValueError("unknown provider")
             prof_cl["provider"] = cl["provider"]
-        for k in ("ollama_model", "anthropic_model", "claude_code_model"):
+        for k in MODEL_KEYS():
             if k in cl:
-                prof_cl[k] = str(cl[k])
+                prof_cl[k] = str(cl[k]).strip()[:120]
         prof["cover_letter"] = prof_cl
 
     # --- search terms ---
@@ -223,3 +223,140 @@ def update_settings(payload):
         _save_yaml(prof)
 
     return get_settings()
+
+
+# --- AI providers (Settings page; API keys live in config/llm_keys.json and never leave the server) ---------------------
+
+def _llm():
+    from src import llm
+    return llm
+
+
+def MODEL_KEYS() -> list[str]:
+    return [f"{name}_model" for name in _llm().ORDER]
+
+
+def get_llm(account: dict | None = None, show_keys: bool = False, show_usage: bool = False) -> dict:
+    """Every provider with its model, readiness and the last characters of the caller's own key.
+
+    account=None describes the site-wide settings. With an account's settings ({"keys", "cfg"}) it describes what that
+    account's requests use: its own keys and choices first, the site's wherever it has set nothing."""
+    llm = _llm()
+    own_cfg = (account or {}).get("cfg") or {}
+    site_only = account is None
+    with llm.scoped(account):
+        cfg = llm.effective()
+        avail, where = llm.describe(cfg), llm.privacy(cfg)
+        mine = cfg if site_only else own_cfg        # the values this scope itself holds (and so can edit)
+        inherited = {} if site_only else llm.site_cfg()
+        rows, used = [], llm.usage() if show_usage else {}
+        for name in llm.ORDER:
+            row = {"name": name, "label": llm.LABELS[name], "available": bool(avail[name]["available"]),
+                   "detail": avail[name]["detail"], "privacy": where.get(name, ""), "model": str(mine.get(f"{name}_model") or ""),
+                   "default_model": str(inherited.get(f"{name}_model") or ""), "takes_key": name in llm.KEY_ENV,
+                   "key_env": llm.KEY_ENV.get(name, ""), "has_key": False, "key_source": "", "key_hint": "", "keys_url": "",
+                   "base_url": "", "editable_url": False, "key_optional": False, "usage": used.get(name) or None}
+            if name in llm.KEY_ENV:
+                key, source = llm.api_key(name)
+                own = source == ("saved" if site_only else "account")     # only your own key gets a hint
+                row.update(has_key=bool(key), key_source=source, key_hint=key[-4:] if show_keys and own and len(key) >= 12 else "")
+            if name in llm.OPENAI_COMPAT:
+                row.update(base_url=llm.endpoint(name, cfg)["base_url"], keys_url=llm.OPENAI_COMPAT[name]["keys_url"],
+                           editable_url=name == "custom", key_optional=name == "custom",
+                           default_model=row["default_model"] or llm.OPENAI_COMPAT[name]["model"])
+                if name == "custom":
+                    row.update(base_url=str(mine.get("custom_base_url") or ""), default_base_url=str(inherited.get("custom_base_url") or ""))
+            elif name == "ollama":
+                row.update(default_model=row["default_model"] or llm.DEFAULT_OLLAMA_MODEL, base_url=llm.OLLAMA_HOST)
+            rows.append(row)
+        pinned = (cfg.get("provider") or "auto").strip().lower()
+        return {"provider": pinned, "own_provider": str(mine.get("provider") or ""),
+                "site_provider": (inherited.get("provider") or "auto") if not site_only else "",
+                "active": llm.active_provider(cfg, {n: bool(avail[n]["available"]) for n in llm.ORDER}),   # as llm.generate() chooses
+                "providers": rows, "options": llm.options(cfg),
+                "option_limits": {k: {"default": d, "min": lo, "max": hi} for k, (d, lo, hi) in llm.OPTION_LIMITS.items()}}
+
+
+def update_llm(payload, account: dict | None = None, allow_private_urls: bool = True) -> dict | None:
+    """{provider?, options: {temperature?, max_tokens?, timeout?, fallback?}, providers: {name: {api_key?, model?,
+    base_url?}}}. An empty api_key forgets the saved key; an empty model, base URL or provider goes back to the default.
+
+    account=None writes the site-wide settings (profile.yaml + llm_keys.json). Otherwise the account's own settings
+    dict is changed and returned for the caller to store; an account that leaves something empty inherits the site's."""
+    llm = _llm()
+    if not isinstance(payload, dict):
+        raise ValueError("payload must be an object")
+    site_only = account is None
+    prof = _load_yaml() if site_only else {}
+    cl = (prof.get("cover_letter") or {}) if site_only else dict((account or {}).get("cfg") or {})
+    own_keys = {} if site_only else dict((account or {}).get("keys") or {})
+
+    def put(key, value):          # an account stores only what it chose; the site keeps explicit values
+        if value in ("", None) and not site_only:
+            cl.pop(key, None)
+        else:
+            cl[key] = value
+
+    if "provider" in payload:
+        want = payload["provider"] or ""
+        if want == "" and not site_only:
+            cl.pop("provider", None)
+        elif want not in llm.PROVIDERS:
+            raise ValueError("unknown provider")
+        else:
+            cl["provider"] = want
+    if "options" in payload:
+        opts = payload["options"]
+        if not isinstance(opts, dict):
+            raise ValueError("options must be an object")
+        for key, (default, lo, hi) in llm.OPTION_LIMITS.items():
+            if key in opts:
+                try:
+                    v = type(default)(opts[key])
+                except (TypeError, ValueError):
+                    raise ValueError(f"{key} must be a number") from None
+                if not lo <= v <= hi:
+                    raise ValueError(f"{key} must be between {lo} and {hi}")
+                cl[key] = v
+        if "fallback" in opts:
+            cl["fallback"] = bool(opts["fallback"])
+    rows = payload.get("providers") or {}
+    if not isinstance(rows, dict):
+        raise ValueError("providers must be an object")
+    keys = []
+    for name, row in rows.items():
+        if name not in llm.ORDER or not isinstance(row, dict):
+            raise ValueError(f"unknown provider: {name}")
+        if "model" in row:
+            put(f"{name}_model", str(row["model"] or "").strip()[:120])
+        if "base_url" in row:
+            if name != "custom":
+                raise ValueError("only the custom endpoint has an editable base URL")
+            url = llm.clean_base_url(str(row["base_url"] or ""))
+            if url and not allow_private_urls and not _public_url(url):
+                raise ValueError("that address is private or unreachable: only an admin can point the custom endpoint at a local network")
+            put("custom_base_url", url)
+        if "api_key" in row:
+            if name not in llm.KEY_ENV:
+                raise ValueError(f"{llm.LABELS[name]} does not take an API key")
+            key = str(row["api_key"] or "").strip()
+            if len(key) > 400 or any(c.isspace() for c in key):
+                raise ValueError("that does not look like an API key")
+            keys.append((name, key))
+    if site_only:
+        prof["cover_letter"] = cl
+        _save_yaml(prof)
+        for name, key in keys:
+            llm.set_key(name, key)
+        return None
+    for name, key in keys:
+        if key:
+            own_keys[name] = key
+        else:
+            own_keys.pop(name, None)
+    return {"keys": own_keys, "cfg": cl}
+
+
+def _public_url(url: str) -> bool:
+    from src import job_import
+    return job_import._public_url(url)

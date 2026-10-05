@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block page %}
+      <section class="sheet" id="addJobCard">
+        <h1 class="sheet-title">Add a job <span class="quiet">· Found it yourself ·</span></h1>
+        <p class="quiet">LinkedIn, Indeed, a friend's link, a company's own site: add any job and it's scored against your resume
+          like everything the scanner finds. Nothing is applied for you.</p>
+        <div class="aj-grid">
+          <div class="block">
+            <h3>From a link</h3>
+            <div class="pxrow"><input id="ajUrl" placeholder="https://… the job posting" style="flex:1"><button type="button" class="sm" id="ajFetch">Read the page</button></div>
+            <div id="ajMsg" class="co"></div>
+            <h3 style="margin-top:18px">Details</h3>
+            <div class="aj-form">
+              <label>Job title<input id="ajTitle"></label>
+              <label>Company<input id="ajCompany"></label>
+              <label>Location<input id="ajLocation" placeholder="e.g. Port of Spain, or Remote"></label>
+              <label>Salary <span class="co">(optional)</span><input id="ajSalary"></label>
+              <label class="aj-wide">Description <span class="co">(paste the full posting: the match is based on it)</span><textarea id="ajDesc" rows="12"></textarea></label>
+            </div>
+            <div class="actions"><button type="button" class="go sm" id="ajSave">Add to my ledger</button></div>
+            <div id="ajDone"></div>
+          </div>
+          <div class="block">
+            <h3>Save to JobHunter button</h3>
+            <p class="co">Drag this to your browser's bookmarks bar:</p>
+            <p><a class="aj-bm" id="ajBookmarklet" href="#">Save to JobHunter</a></p>
+            <p class="co">Then, on any job page, click it: this page opens with the details filled in for you to check and save.
+              It works on sites you're logged into (like LinkedIn) because your browser reads the page, not this server.
+              Select the job description first if the page is cluttered.</p>
+          </div>
+        </div>
+      </section>
+{% endblock %}
+
+{% block page_js %}
+<script>window.JH_ORIGIN="{{ request.scheme }}://{{ request.get_host }}";</script>
+<script src="{% static 'js/add_job.js' %}?v=1"></script>
+{% endblock %}

@@ -95,12 +95,96 @@ def settings_view(request):
             return Response({"error": str(e)}, status=500)
     # PUT
     try:
-        return Response(update_settings(request.data))
+        from . import site
+        data = request.data
+        if isinstance(data, dict) and "cover_letter" in data and not site.can_edit(request.user):
+            data = {k: v for k, v in data.items() if k != "cover_letter"}   # the site-wide provider is the admin's; see /api/llm/
+        return Response(update_settings(data))
     except ValueError as e:
         return Response({"error": str(e)}, status=400)
     except Exception as e:
         import traceback
         return Response({"error": str(e), "trace": traceback.format_exc()[:1000]}, status=500)
+
+
+def _llm_scope(request):
+    """Whose AI settings a request means, and whether it may change them: (scope, can_edit, account settings | None).
+
+    "account": the signed-in person's own keys and choices (theirs alone to change). "site": the site-wide ones every
+    account and guest falls back to, changed only by an admin (see core.site). Signed-in people get their account
+    unless they ask for ?scope=site; guests only ever see the site."""
+    from . import site
+    user = request.user
+    data = request.data if isinstance(getattr(request, "data", None), dict) else {}
+    want = request.GET.get("scope") or data.get("scope")
+    if user.is_authenticated and want != "site":
+        from accounts.models import UserProfile
+        prof, _ = UserProfile.objects.get_or_create(user=user)
+        return "account", True, prof
+    return "site", site.can_edit(user), None
+
+
+@api_view(["GET", "PUT"])
+def llm_view(request):
+    """AI providers for the Settings page. GET lists them (with options and, for admins, usage counts); PUT {provider?,
+    options?, providers: {name: {api_key?, model?, base_url?}}} saves. Signed in, this is your own account's settings
+    (?scope=site for the site-wide ones, admin only). Keys are write-only: a GET shows at most the last 4 characters
+    of your own."""
+    from . import site
+    from .settings_store import get_llm, update_llm
+    scope, can_edit, prof = _llm_scope(request)
+    admin = site.can_edit(request.user)
+    if request.method == "PUT":
+        if not can_edit:
+            return Response({"error": "only an admin account can change the site-wide AI providers"}, status=403)
+        try:
+            body = {k: v for k, v in request.data.items() if k != "scope"}
+            if prof is None:
+                update_llm(body)
+            else:
+                prof.llm = update_llm(body, prof.llm or {}, allow_private_urls=admin)
+                prof.save(update_fields=["llm", "updated_at"])
+        except ValueError as e:
+            return Response({"error": str(e)}, status=400)
+    own = None if prof is None else (prof.llm or {"keys": {}, "cfg": {}})
+    return Response({**get_llm(own, show_keys=can_edit, show_usage=admin), "scope": scope, "can_edit": can_edit,
+                     "signed_in": request.user.is_authenticated, "can_edit_site": admin})
+
+
+@api_view(["POST"])
+def llm_check(request, action):
+    """POST /api/llm/test/ {provider} sends one tiny prompt; /api/llm/models/ lists what the provider offers (both run
+    with the settings of the scope being edited); /api/llm/reset-usage/ clears the usage counts (admin)."""
+    import time
+    from . import site
+    from src import llm
+    if action not in ("test", "models", "reset-usage"):
+        return Response({"error": f"no such API endpoint: {request.path}"}, status=404)
+    scope, can_edit, prof = _llm_scope(request)
+    if action == "reset-usage":
+        if not site.can_edit(request.user):
+            return Response({"error": "only an admin account can reset the usage counts"}, status=403)
+        llm.reset_usage()
+        return Response({"ok": True})
+    if not can_edit:
+        return Response({"error": "sign in to test AI providers"}, status=403)
+    name = str((request.data or {}).get("provider") or "")
+    if name not in llm.ORDER:
+        return Response({"error": "unknown provider"}, status=400)
+    t0 = time.time()
+    with llm.scoped(None if prof is None else prof.llm):
+        cfg = llm.effective()
+        try:
+            if action == "models":
+                return Response({"ok": True, "models": llm.list_models(name, cfg)})
+            if name in llm.OPENAI_COMPAT:   # short replies are fine here; the other backends insist on a full paragraph
+                text = llm.call(name, "You are a connection test.", "Reply with the single word: ready", cfg, timeout=40, max_tokens=200)
+            else:
+                text = llm.call(name, "You are a connection test.", "In two or three sentences, say that the connection "
+                                "works and name one thing a good cover letter does.", cfg)
+            return Response({"ok": True, "reply": text[:200], "ms": int((time.time() - t0) * 1000)})
+        except llm.LLMUnavailable as e:
+            return Response({"ok": False, "error": str(e)})
 
 
 def api_not_found(request):
@@ -186,3 +270,37 @@ def alerts_view(request):
         return Response({"channels": alerts.send({"subject": "JobHunter: test alert",
                                                    "text": "Alerts are set up. You'll get new good-fit roles, follow-ups due and closing dates here.\n"})})
     return Response(alerts_service.run(user or alerts_service.owner_user()))
+
+
+@api_view(["POST"])
+def job_import(request):
+    """Add a job you found yourself. {url} alone with preview=true reads the page and returns the fields to check;
+    {ld_json, url} comes from the browser button; saving takes {title, company, description, location, url, …}.
+    The job is scored exactly like a scanned one and lands in the ledger."""
+    from src import job_import as ji
+    d = request.data if isinstance(request.data, dict) else {}
+    url = str(d.get("url") or "").strip()[:2000]
+    if d.get("preview"):
+        if d.get("ld_json"):
+            got = ji.from_ld_json(str(d["ld_json"])[:200000], url)
+            if got:
+                return Response(got)
+        if not url:
+            return Response({"error": "paste a link"}, status=400)
+        got = ji.fetch(url)
+        return Response(got, status=400 if got.get("error") else 200)
+    fields = {k: str(d.get(k) or "") for k in ("title", "company", "location", "description", "url", "salary", "posted_at", "expires_at")}
+    if len(fields["title"].strip()) < 3:
+        return Response({"error": "a job title is needed"}, status=400)
+    if len(fields["description"].strip()) < 80:
+        return Response({"error": "paste the job description too (at least a few sentences): it's what the match is based on"}, status=400)
+    from src import db, run, score
+    job = score.score_job(ji.build_job(fields), run.load_config())
+    db.upsert_jobs([job])
+    return Response({"job_id": job["job_id"], "fit_score": job.get("fit_score"), "tier": job.get("tier"), "why": job.get("why"),
+                     "title": job["title"], "company": job["company"]}, status=201)
+
+
+@ensure_csrf_cookie
+def add_job_page(request):
+    return render(request, "pages/add_job.html", {"page": "jobs", "page_title": "Add a job"})

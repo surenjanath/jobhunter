@@ -4,10 +4,13 @@ jobhunt/config/profile.yaml
 jobhunt/config/fact_bank.md
 jobhunt/config/form_answers.md
 jobhunt/config/ui_settings.json
+jobhunt/config/llm_keys.json
 jobhunt/config/resume.md
 # Your resume and notes
 docs/*Resume*.md
 docs/*resume*.md
+/*Resume*.md
+/*resume*.md
 docs/Role_Fit_Map*.md
 docs/Job_Search_Links.md
 docs/private/

@@ -203,7 +203,7 @@ def enrich(request):
     cfg = (_load_yaml().get("cover_letter") or {})
     provider = (request.data or {}).get("provider")
     if provider:
-        cfg = {**cfg, "provider": provider}
+        cfg = {**cfg, "provider_override": provider}   # this one call, whatever the account or site has pinned
     try:
         text = profile_store.get_resume_text(prof["_resume_id"])
         out = resume_parse.enrich_with_llm(text, {}, cfg)

@@ -20,17 +20,60 @@
             <label>Minimum score <input type="number" id="setMinScore" min="0" max="100" value="35" style="width:72px"></label><br>
             <label>Maximum age, days <input type="number" id="setMaxAge" min="1" max="365" value="30" style="width:72px"></label><br>
             <label><input type="checkbox" id="setKeepLocal" checked> Keep every Trinidad posting (ignore minimum score)</label><br>
-            <label>Trinidad postings per board <input type="number" id="setTTLimit" min="5" max="200" value="40" style="width:72px"></label><br>
-            <label>Letter provider
-              <select id="setProvider">
-                <option value="auto">auto</option>
-                <option value="claude_code">claude_code</option>
-                <option value="ollama">ollama</option>
-                <option value="anthropic">anthropic</option>
-                <option value="template">template</option>
-              </select>
-            </label>
+            <label>Trinidad postings per board <input type="number" id="setTTLimit" min="5" max="200" value="40" style="width:72px"></label>
           </div>
+        </div>
+        <div class="block" style="margin-top:18px" id="llmBlock">
+          <h3>AI providers <span class="quiet" id="llmMeta"></span></h3>
+          <p class="co">Writes cover letters and the optional "polish with AI" passes. Everything also works with no AI at all.
+            Add a key for any provider below, or point the custom endpoint at any OpenAI-compatible server
+            (LM Studio, vLLM, LiteLLM, a company gateway). Keys are stored on this server only and are never shown again.</p>
+          <div class="llm-scope" id="llmScope" hidden>Editing
+            <button type="button" class="sm" data-scope="">My account</button>
+            <button type="button" class="sm" data-scope="site">Everyone (site-wide)</button>
+          </div>
+          <p class="co" id="llmWho"></p>
+          <label>Use
+            <select id="setProvider">
+              <option value="" hidden disabled>Site default</option>
+              <option value="auto">auto</option>
+              <option value="claude_code">Claude Code</option>
+              <option value="ollama">Ollama</option>
+              <option value="anthropic">Anthropic API</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="groq">Groq</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="mistral">Mistral</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="xai">xAI</option>
+              <option value="together">Together AI</option>
+              <option value="cerebras">Cerebras</option>
+              <option value="fireworks">Fireworks AI</option>
+              <option value="custom">Custom endpoint</option>
+              <option value="template">Template (no AI)</option>
+            </select>
+          </label>
+          <span class="co" id="llmActive"></span>
+          <label class="site-toggle"><input type="checkbox" id="llmFallback"> <b>If that provider fails, try the other ready ones</b>
+            <span class="co">A rate limit or outage then costs you nothing. Your text may go to any provider marked ready below.</span></label>
+          <details class="llm-adv">
+            <summary>Generation options</summary>
+            <div class="llm-fields">
+              <label>Creativity (temperature) <input type="number" id="llmTemp" step="0.1"></label>
+              <label>Longest reply, tokens <input type="number" id="llmMaxTok" step="100"></label>
+              <label>Give up after, seconds <input type="number" id="llmTimeout" step="10"></label>
+            </div>
+            <p class="co">Lower creativity keeps letters closer to your facts. Raise the reply length if letters are cut off, and the
+              wait if a slow local model times out. Claude Code manages these itself.</p>
+            <div class="actions"><button type="button" class="sm" id="llmOptSave">Save options</button></div>
+          </details>
+          <div class="actions llm-tools">
+            <button type="button" class="sm" id="llmTestAll">Test every ready provider</button>
+            <button type="button" class="text" id="llmResetUsage">Reset usage counts</button>
+          </div>
+          <div id="llmList" class="llm-list"><span class="co">Loading…</span></div>
+          <div class="co" id="llmNote"></div>
         </div>
         <div class="block" style="margin-top:18px" id="siteAccess">
           <h3>Site access</h3>
@@ -73,5 +116,5 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/settings.js' %}?v=4"></script>
+<script src="{% static 'js/settings.js' %}?v=8"></script>
 {% endblock %}

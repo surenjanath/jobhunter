@@ -458,11 +458,10 @@ def test_cover_letters(ranked: list[dict]) -> None:
     print(f"         backends: " + ", ".join(
         f"{k}={'yes' if v['available'] else 'no'}" for k, v in avail.items()))
     check("template is always available as a floor", avail["template"]["available"])
-    check(
-        "no backend reachable here, so template path is used",
-        cover_letter.generate_with_llm(ranked[0], fact_bank, {})[0] is None
-        or any(v["available"] for k, v in avail.items() if k != "template"),
-    )
+    # the suite is offline: a model that happens to be installed here (Claude Code, Ollama) is never really called
+    with mock.patch.object(llm, "call", side_effect=llm.LLMUnavailable("offline test")) as asked:
+        check("no backend answers, so the template path is used",
+              cover_letter.generate_with_llm(ranked[0], fact_bank, {})[0] is None and asked.called)
     check("pinning provider=template short-circuits the LLMs",
           cover_letter.generate_with_llm(ranked[0], fact_bank, {"provider": "template"})[0] is None)
     check("fence stripping cleans local-model output",
@@ -503,8 +502,10 @@ def test_end_to_end(cfg: dict) -> None:
         found = cover_letter.find_job(data[0]["job_id"])
         check("cover_letter can look up a cached job by id", found is not None)
         if found:
-            _text, path, _backend = cover_letter.generate(found)
-            check("letter written to disk", path.exists(), path.name)
+            from src import llm
+            with mock.patch.object(llm, "call", side_effect=llm.LLMUnavailable("offline test")):   # template, never a real model
+                _text, path, _backend = cover_letter.generate(found)
+            check("letter written to disk", path.exists() and _backend == "template", path.name)
             head = path.read_text()[:400]
             check("letter file has posting link + fit header", "Posting:" in head and "Fit score:" in head)
 

@@ -109,6 +109,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'accounts.middleware.PrivateSiteMiddleware',      # JOBHUNTER_PRIVATE=1: everything behind sign-in
+    'accounts.middleware.AccountLLMMiddleware',      # a signed-in account's own AI keys; the site's otherwise
     'accounts.middleware.AccountResumeMiddleware',   # a signed-in account's resume, for everything this request reads
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

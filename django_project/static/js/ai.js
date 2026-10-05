@@ -127,7 +127,7 @@ async function startMetrics(onLevel, opts){
 }
 const aiPost=(url,body)=>jfetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
 function aiSwitch(st){
-  if(!st.any) return '<p class="co">No AI model connected, so the built-in rules are doing the work (they are decent). Install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> to add a private local model.</p>';
+  if(!st.any) return '<p class="co">No AI model connected, so the built-in rules are doing the work (they are decent). Install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> for a private local model, or add an API key under <a href="/settings/#llmBlock">Settings → AI providers</a>.</p>';
   const first=st.active||Object.entries(st.providers).filter(([,v])=>v).map(([k])=>k)[0], where=st.privacy[first]||'';
   return `<label class="aiopt"><input type="checkbox" id="aiOn"> Polish with AI <span class="co">(${esc(first)}: ${esc(where)})</span></label>`;
 }

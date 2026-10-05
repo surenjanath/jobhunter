@@ -455,7 +455,7 @@ def set_provider():
     """Pin the cover-letter backend by rewriting the one line in profile.yaml."""
     import re as _re
     name = (request.get_json(force=True) or {}).get("provider", "auto")
-    if name not in ("auto", "claude_code", "ollama", "anthropic", "template"):
+    if name not in llm.PROVIDERS:
         return jsonify({"ok": False, "error": "unknown provider"}), 400
     path = ROOT / "config" / "profile.yaml"
     text = path.read_text(encoding="utf-8")

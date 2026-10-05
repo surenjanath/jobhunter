@@ -42,24 +42,20 @@ BUZZ = ("team player", "hard-working", "hardworking", "results-driven", "go-gett
 
 def llm_status(cfg: dict | None = None) -> dict:
     """Which providers exist, which one a request would ACTUALLY use (the pinned provider, else the first available
-    in llm.ORDER — the same choice llm.generate() makes), and what would leave your machine if you use it."""
+    in llm.ORDER, or the next ready one when fallback is on — the same choice llm.generate() makes), and what would leave your machine if you use it."""
     try:
         from src import llm
-        d = llm.describe()
-        order = list(llm.ORDER)
+        d = llm.describe(cfg)
+        where = llm.privacy(cfg)
     except Exception:  # noqa: BLE001
-        d, order = {}, []
+        d, where = {}, {}
     avail = {k: bool(v.get("available")) for k, v in d.items() if k != "template"}
-    pinned = ((cfg or {}).get("provider") or "auto").strip().lower()
-    if pinned in avail:
-        active = pinned if avail[pinned] else None
-    elif pinned in ("template", "none"):
+    try:
+        active = llm.active_provider(cfg or {}, avail)
+    except Exception:  # noqa: BLE001
         active = None
-    else:
-        active = next((k for k in order if avail.get(k)), None)
     return {"providers": avail, "any": active is not None, "active": active,
-            "privacy": {"ollama": "stays on this machine", "claude_code": "sent to Anthropic via the Claude Code CLI",
-                        "anthropic": "sent to the Anthropic API"}}
+            "privacy": where}
 
 
 def _ask_llm(system: str, user: str, cfg: dict | None = None) -> tuple[str | None, str]:

@@ -20,6 +20,7 @@
           <button type="button" class="text" id="viewDel" title="Delete the selected view">✕</button>
           <button type="button" class="text" id="clearBtn">Clear</button>
           <button type="button" class="text" id="densityBtn">Compact</button>
+          <a class="text" href="/add-job/" title="Add a job you found yourself (LinkedIn, a friend's link…)">+ Add a job</a>
         </div>
         <div class="filters">
           <input type="search" id="q" placeholder="Search title, company, location">
@@ -45,6 +46,6 @@
 {% block page_dialogs %}{% include "partials/_dialog_compare.html" %}{% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/ledger.js' %}?v=1"></script>
+<script src="{% static 'js/ledger.js' %}?v=2"></script>
 <script src="{% static 'js/ledger_tools.js' %}?v=3"></script>
 {% endblock %}

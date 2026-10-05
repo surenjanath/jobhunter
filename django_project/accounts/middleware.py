@@ -29,6 +29,23 @@ class AccountResumeMiddleware:
             profile_store.reset_request_resume(token)
 
 
+class AccountLLMMiddleware:
+    """A signed-in account's own AI keys and choices apply to everything its request does. Where the account has set
+    nothing, the site-wide settings (added by an admin) are used, as they are for guests."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, "user", None)
+        own = user.profile.llm if user is not None and user.is_authenticated and hasattr(user, "profile") else None
+        if not own:
+            return self.get_response(request)
+        from src import llm
+        with llm.scoped(own):
+            return self.get_response(request)
+
+
 class PrivateSiteMiddleware:
     """settings.JOBHUNTER_PRIVATE: every page and API needs a signed-in user. Pages redirect to /login/, API calls get
     a JSON 401. Only sign-in itself, the health check and static files stay open. Off by default (local use)."""

@@ -162,3 +162,9 @@ Object.assign(PAGE_HOOKS,{
     return false;
   },
 });
+
+// /ledger/?open=<job_id> opens that job's dialog once the list has loaded (e.g. right after adding a job yourself)
+(function(){
+  const prev=PAGE_HOOKS.init;
+  PAGE_HOOKS.init=async d=>{ if(prev) await prev(d); const id=new URLSearchParams(location.search).get('open'); if(id && JOBS.some(j=>j.job_id===id)) openJob(id); };
+})();

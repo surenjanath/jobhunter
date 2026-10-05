@@ -18,6 +18,7 @@ class UserProfile(models.Model):
     resume_text = models.TextField(blank=True, default="")       # raw text, for evidence retrieval
     resume_filename = models.TextField(blank=True, default="")
     preferences = models.JSONField(default=dict, blank=True)     # targets / min_score / salary floor / work_mode
+    llm = models.JSONField(default=dict, blank=True)             # own AI settings: {keys: {provider: key}, cfg: {...}}
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

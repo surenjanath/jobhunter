@@ -93,7 +93,10 @@ Every endpoint works without a model. `POST` with `{"ai": true}` (or `?ai=1` on 
 | `GET /api/logs/?since=N` | Stream the running task's output |
 | `POST /api/live-check/`, `/api/tests/` | Audit real sources / run the test suite |
 | `GET /api/state/`, `/api/stats/`, `/health/` | App state, counts, health |
-| `GET/PUT /api/settings/`, `POST /api/provider/` | Settings and the cover-letter provider |
+| `GET/PUT /api/settings/`, `POST /api/provider/` | Settings and the site-wide cover-letter provider (admin; the app uses `/api/llm/`) |
+| `GET/PUT /api/llm/` | Signed in: your own account's AI settings; `?scope=site` (or a guest): the site-wide ones, changed by an admin only. AI providers: readiness, models, custom endpoint; usage counts; `PUT {provider?, options: {temperature?, max_tokens?, timeout?, fallback?}, providers: {name: {api_key?, model?, base_url?}}}` (admin; keys are write-only) |
+| `POST /api/llm/test/`, `POST /api/llm/models/` | `{provider}`: send one test prompt / list the provider's models (admin) |
+| `POST /api/llm/reset-usage/` | Clear the per-provider usage counts (admin) |
 
 ### Interview coach (`coach/views.py`, logic in `jobhunt/src/coach.py`)
 

@@ -10,6 +10,7 @@ Created from the `*.example*` templates on first run. They are git-ignored, so y
 | `fact_bank.md` | The only facts the cover-letter generator may use (write it flat and honest) |
 | `form_answers.md` | Copy-paste answers for application forms |
 | `ui_settings.json` | Display preferences (remote / links / salary visibility) |
+| `llm_keys.json` | API keys saved from Settings → AI providers (created when you save the first one) |
 
 Most of `profile.yaml` can be edited in the app: **Settings** (sources, thresholds, provider) and **Profile**
 (preferences, target titles, skills).
@@ -33,7 +34,7 @@ keep_all_trinidad: true          # keep every local posting, whatever its fit, s
 trinidad_limit_per_source: 40    # newest N postings per Trinidad board
 trinidad_custom_sites: []        # employers added from the Trinidad page
 company_boards: {greenhouse: [...], lever: [...], ashby: [...]}   # remote companies to watch
-cover_letter: {provider: auto}   # auto | claude_code | ollama | anthropic | template
+cover_letter: {provider: auto}   # auto | claude_code | ollama | anthropic | openai | gemini | groq | openrouter | mistral | deepseek | xai | together | cerebras | fireworks | custom | template
 preferences:          # saved from the Profile page
   work_mode: both     # both | local_first | remote_first | local_only | remote_only
   min_salary_monthly_ttd: 0
@@ -59,6 +60,8 @@ See [`.env.example`](../.env.example). All optional.
 | `SHEET_ID`, `GOOGLE_APPLICATION_CREDENTIALS` | Google Sheets sync (`python -m src.run` without `--dry-run`) |
 | `OLLAMA_HOST`, `OLLAMA_MODEL` | Local model endpoint / default model |
 | `ANTHROPIC_API_KEY` | Anthropic API backend |
+| `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `TOGETHER_API_KEY`, `CEREBRAS_API_KEY`, `FIREWORKS_API_KEY` | Keys for the other API providers |
+| `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | The custom OpenAI-compatible endpoint (key optional) |
 | `JOOBLE_API_KEY` | Enables the Jooble source |
 
 ## AI providers
@@ -68,8 +71,40 @@ Used for cover letters and the optional "AI read of your resume". Pin one in **S
 - `claude_code`: the Claude Code CLI on your PATH (no key)
 - `ollama`: a local model (offline, nothing leaves your machine)
 - `anthropic`: the API (`ANTHROPIC_API_KEY`)
+- `openai`, `gemini`, `groq`, `openrouter`, `mistral`, `deepseek`, `xai`, `together`, `cerebras`, `fireworks`: hosted APIs,
+  each with its own key
+- `custom`: any OpenAI-compatible endpoint (LM Studio, vLLM, LiteLLM, a company gateway). Give its base URL, for
+  example `http://localhost:1234/v1`, and a model id; the key is optional
 - `template`: deterministic, built from your resume / fact bank, always available
-- `auto`: tries them in that order, falling back to the template
+- `auto`: tries them in that order (skipping APIs with no key), falling back to the template
+
+**Settings → AI providers** is where you add a key, choose a model (**List models** asks the provider what it offers)
+and check the connection (**Save and test**). Keys are never sent back to the browser.
+
+Whose key is used:
+
+- **Your account's own.** Signed in, the section edits your account: your keys, provider, models, custom endpoint and
+  generation options. Only your requests use them and no other account (the admin included) can see them. They are
+  stored with your account in Django's database, as plain text like the site keys, so protect the database file.
+- **The site-wide ones**, wherever your account has set nothing, and always for guests. An admin sets these under
+  **Everyone (site-wide)**; they are saved to `jobhunt/config/llm_keys.json` (git-ignored, readable only by your
+  user) and `profile.yaml`, and win over the environment variables above. On a hosted copy whose disk resets on
+  deploy, set the environment variables instead.
+- With no accounts at all (a plain local install) there is only the site-wide set, and anyone using the copy can edit it.
+
+An account that is not an admin cannot point the custom endpoint at a private or local address. Usage counts are
+shown to admins only. The scheduled scanner and the command line always use the site-wide settings.
+
+Also in that section (per account, or under `cover_letter` in `profile.yaml` for the site):
+
+- **If that provider fails, try the other ready ones** (`fallback: true`): a pinned provider that errors (rate limit,
+  outage) hands the request to the next ready provider instead of dropping to the template. Off by default, because
+  your text can then reach any provider you have set up.
+- **Generation options**: `temperature` (0 to 1.5, default 0.4), `max_tokens` (200 to 8000, default 1500) and
+  `timeout` in seconds (10 to 600, default 120).
+- **Usage**: each provider shows its requests, tokens, average time and last error. These are counts only, kept in
+  `jobhunt/output/llm_usage.json`; no prompt or reply text is stored. **Reset usage counts** clears them.
+- **Test every ready provider** sends one short prompt to each and reports which work and which is fastest.
 
 For semantic resume matching install an embedding model (`ollama pull nomic-embed-text`) and press **Re-index** on the
 Profile page. Without it retrieval is keyword-based (BM25), which works well but is less forgiving of different wording.

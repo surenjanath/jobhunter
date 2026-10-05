@@ -471,7 +471,8 @@ def cover_letter(request):
         return Response({"ok": False, "error": "not found"}, status=404)
     with _lock:
         _letter.update(busy=True, job_id=job_id, text="", path="", backend="", error="", job={k: job.get(k) for k in ("title", "company", "url", "fit_score", "flags")})
-    threading.Thread(target=_draft_letter, args=(job,), daemon=True).start()
+    from src import llm as _llm
+    threading.Thread(target=_llm.carry(_draft_letter), args=(job,), daemon=True).start()   # the letter uses this account's AI settings
     return Response({"ok": True, "pending": True, "job_id": job_id, "job": _letter["job"]})
 
 
@@ -609,7 +610,7 @@ def state(request):
         provider = "auto"
         try:
             import yaml
-            provider = (yaml.safe_load((ROOT / "config/profile.yaml").read_text()) or {}).get("cover_letter", {}).get("provider", "auto")
+            provider = _llm.effective().get("provider") or "auto"   # this account's choice, else the site's
         except Exception:
             pass
         return Response({
@@ -660,8 +661,13 @@ def run_tests(request):
 
 @api_view(["POST"])
 def set_provider(request):
+    """Site-wide provider (the legacy dock call). The app itself now uses PUT /api/llm/, which is per account."""
     name = (request.data or {}).get("provider", "auto")
-    if name not in ("auto","claude_code","ollama","anthropic","template"):
+    from core import site
+    from src import llm as _llm
+    if not site.can_edit(request.user):
+        return Response({"ok": False, "error": "only an admin account can change the site-wide provider"}, status=403)
+    if name not in _llm.PROVIDERS:
         return Response({"ok": False, "error": "unknown provider"}, status=400)
     import re
     path = ROOT / "config/profile.yaml"

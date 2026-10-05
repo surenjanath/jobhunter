@@ -70,13 +70,13 @@ async function loadState(){
   let healthy=false;
   try{ const h=await jfetch('/health/'); healthy=!!h.ok; $('#healthDot').className='health'+(h.ok?'':' bad'); $('#healthDot').title=h.ok?`ok · ${h.jobs} jobs`:'down'; }catch(e){ $('#healthDot').className='health bad'; }
   const bk=d.backends||{};
-  $('#backends').innerHTML=Object.entries(bk).filter(([,v])=>v&&typeof v==='object').map(([k,v])=>`${esc(k)} ${v.available?'ready':'off'}`).join('  ·  ');
+  $('#backends').innerHTML=Object.entries(bk).filter(([k,v])=>v&&typeof v==='object'&&(v.available||k==='claude_code'||k==='ollama')).map(([k,v])=>`${esc(k)} ${v.available?'ready':'off'}`).join('  ·  ');
   if(d.provider) $('#prov').value=d.provider; $('#providerPill').textContent=d.provider||'auto';
   $('#dbInfo').textContent=`DB: ${d.stats?d.stats.total:JOBS.length} jobs`;
   const anyLLM=Object.entries(bk).some(([k,v])=>k!=='template'&&v&&v.available);
   const b=[];
   if(!d.sheet_configured) b.push('<div class="banner">Sheet is not connected. Set SHEET_ID in the environment before sync.</div>');
-  if(!anyLLM) b.push('<div class="banner">Letters are in template mode. Choose Ollama or Claude from the provider menu.</div>');
+  if(!anyLLM) b.push('<div class="banner">Letters are in template mode. Start Ollama, or add an API key under <a href="/settings/#llmBlock">Settings → AI providers</a>.</div>');
   $('#banners').innerHTML=b.join('');
   if(d.sheet_id){ $('#sheetLink').href=`https://docs.google.com/spreadsheets/d/${d.sheet_id}/edit`; $('#sheetLink').hidden=false; }
   d.counts={roles:JOBS.length, t1:JOBS.filter(j=>j.fit_score>=65).length, t2:JOBS.filter(j=>j.fit_score>=50&&j.fit_score<65).length, blocked:JOBS.filter(j=>BAD.test(j.flags||'')).length};
@@ -166,7 +166,8 @@ function exportCsv(rows){
 function wireShell(){
   const th=$('#navTheme'); if(th) th.onclick=()=>setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
   const ex=$('#navExport'); if(ex) ex.onclick=e=>{ e.preventDefault(); exportCsv(typeof filtered==='function'?filtered():JOBS); };
-  const pv=$('#prov'); if(pv) pv.onchange=()=>jfetch('/api/provider/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:pv.value})}).catch(e=>toast(e.message,'bad'));
+  const pv=$('#prov'); if(pv) pv.onchange=()=>jfetch('/api/llm/',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:pv.value})})   // your account's choice when signed in, else the site's
+    .then(()=>{ if(typeof AI_STATUS!=='undefined') AI_STATUS=null; if(typeof loadLLM==='function') loadLLM(); }).catch(e=>toast(e.message,'bad'));
   const run=(id,url,body)=>{ const b=$(id); if(b) b.onclick=()=>launch(url,body,b); };
   run('#bScan','/api/scan/',{dry_run:true}); run('#bSync','/api/scan/',{dry_run:false}); run('#bLive','/api/live-check/',{}); run('#bTests','/api/tests/',{});
   const step=d=>{ const i=CYCLE.indexOf(PAGE); goto(CYCLE[((i<0?0:i)+d+CYCLE.length)%CYCLE.length]); };
