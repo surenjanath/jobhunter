@@ -454,6 +454,7 @@ def _provider() -> str:
 def set_provider():
     """Pin the cover-letter backend by rewriting the one line in profile.yaml."""
     import re as _re
+    from src import llm
     name = (request.get_json(force=True) or {}).get("provider", "auto")
     if name not in llm.PROVIDERS:
         return jsonify({"ok": False, "error": "unknown provider"}), 400
